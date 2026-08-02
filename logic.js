@@ -1,5 +1,5 @@
 // --- STATE MANAGEMENT ---
-let MasterStore = { validBINs: new Set() };
+let MasterStore = { validBINs: new Set(), validORs: new Set() };
 let auditLog = []; // { table, row, type, message }
 
 let appState = {
@@ -1029,11 +1029,21 @@ function customValidateRow(tableId, row, errs, seenLists) {
             }
         }
         
-        // CROSS-TABLE REFERENTIAL INTEGRITY
+        // CROSS-TABLE: BIN → Business (only when Business is loaded + validated)
         if (appState['table1'].loaded && appState['table1'].hasValidated) {
             let normBin = normalizeBIN(bin);
             if (normBin && !MasterStore.validBINs.has(normBin)) {
-                errs[binKey] = 'BIN not found in Table 1 MasterStore';
+                errs[binKey] = 'BIN not found in Business sheet';
+            }
+        }
+    }
+
+    // CROSS-TABLE: Fee OR → Application (only when Application is loaded + validated)
+    if (tableId === 'table4') {
+        let orNo = g('application_or_no');
+        if (appState['table3'].loaded && appState['table3'].hasValidated) {
+            if (orNo && !MasterStore.validORs.has(orNo)) {
+                errs.application_or_no = 'OR not found in Application sheet';
             }
         }
     }
@@ -1251,9 +1261,26 @@ document.getElementById('closeDupModal').addEventListener('click', () => {
     finalizeValidation(activeTableId);
 });
 
+const VALIDATE_ORDER = ['table1', 'table2', 'table3', 'table4'];
+
+function emitCrossTableTips(tableId) {
+    const tips = [];
+    const needsBinParent = tableId === 'table2' || tableId === 'table3' || tableId === 'table4';
+    if (needsBinParent && !(appState.table1.loaded && appState.table1.hasValidated)) {
+        tips.push('Tip: Cross-table BIN check is off until you load and validate the Business sheet.');
+    }
+    if (tableId === 'table4' && !(appState.table3.loaded && appState.table3.hasValidated)) {
+        tips.push('Tip: Cross-table OR check is off until you load and validate the Application sheet.');
+    }
+    tips.forEach(msg => {
+        auditLog.push({ table: tableId, row: 'System', type: 'INFO', message: msg });
+    });
+    return tips;
+}
+
 document.getElementById('validateBtn').addEventListener('click', () => {
-    Object.keys(appState).forEach(tid => {
-        if(appState[tid].loaded) executeValidation(tid);
+    VALIDATE_ORDER.forEach(tid => {
+        if (appState[tid].loaded) executeValidation(tid);
     });
 });
 
@@ -1276,8 +1303,25 @@ function executeValidation(tableId) {
 function finalizeValidation(tableId) {
     let st = appState[tableId];
     let seenLists = {};
+    let crossTips = emitCrossTableTips(tableId);
     
     if (tableId === 'table1') MasterStore.validBINs.clear();
+    if (tableId === 'table3') MasterStore.validORs.clear();
+
+    if (tableId === 'table1') {
+        st.rows.forEach(row => {
+            if (!row) return;
+            let bin = normalizeBIN(row['bin']);
+            if (bin) MasterStore.validBINs.add(bin);
+        });
+    }
+    if (tableId === 'table3') {
+        st.rows.forEach(row => {
+            if (!row) return;
+            let orNo = (row['or_no'] == null ? '' : String(row['or_no'])).trim();
+            if (orNo) MasterStore.validORs.add(orNo);
+        });
+    }
 
     st.rows.forEach((row, idx) => {
         if(!row) return;
@@ -1285,18 +1329,16 @@ function finalizeValidation(tableId) {
         if (Object.keys(errs).length > 0) {
             st.cellErrors[idx] = errs;
         }
-        if (tableId === 'table1') {
-            let bin = normalizeBIN(row['bin']);
-            if (bin) {
-                MasterStore.validBINs.add(bin);
-            }
-        }
     });
     
     if(tableId === activeTableId) {
         currentPage = 1;
         renderTable();
         updateStatusUI();
+        if (crossTips.length > 0) {
+            const s = document.getElementById('status');
+            s.innerHTML = (s.innerHTML ? s.innerHTML + '<br>' : '') + crossTips.map(t => escapeHtml(t)).join('<br>');
+        }
         document.getElementById('exportBtn').style.display = 'inline-flex';
         document.getElementById('exportAuditBtn').style.display = auditLog.length > 0 ? 'inline-flex' : 'none';
     }

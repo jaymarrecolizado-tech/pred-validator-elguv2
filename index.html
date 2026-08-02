@@ -388,7 +388,7 @@ const schemas = {
   retired_date: { required: false, label: 'Retired Date' }
 },
     HINTS: {
-  bin: { rule: 'BIN Format: PSGC7-YEAR4-INC7', fix: 'Use format: 7-digit PSGC code + dash + 4-digit year + dash + 7-digit increment. Example: 1400101-2024-0000001' },
+  bin: { rule: 'BIN Format: PSGC7-YEAR4-INC7 — must exist in Business sheet when Business is loaded', fix: 'Use format: 7-digit PSGC + year + increment. Must match a BIN in the Business sheet when that sheet is loaded and validated.' },
   business_line_code: { rule: 'Required, numeric', fix: 'Enter a numeric business line code. Must exist in system.' },
   capital_amount: { rule: 'Required, number', fix: 'Enter capital amount as a number. Use 0 if not applicable.' },
   gross_amount: { rule: 'Required, number', fix: 'Enter gross amount as a number. Must not be blank.' },
@@ -422,7 +422,7 @@ const schemas = {
   mode_of_payment: { required: true, label: 'Payment Mode', allowed: ['ONLINE','MANUAL'] }
 },
     HINTS: {
-  business_bin: { rule: 'BIN Format: PSGC7-YEAR4-INC7', fix: 'Use format: 7-digit PSGC code + dash + 4-digit year + dash + 7-digit increment. Example: 1400101-2024-0000001' },
+  business_bin: { rule: 'BIN Format: PSGC7-YEAR4-INC7 — must exist in Business sheet when Business is loaded', fix: 'Must match a BIN in the Business sheet when that sheet is loaded and validated. Example: 1400101-2024-0000001' },
   application_type: { rule: 'Must be N, R, or Q', fix: 'Enter N for NEW, R for RENEWAL, or Q for QUARTERLY. Spaces are auto-stripped, case auto-uppercased.' },
   application_date: { rule: 'Required, format MM/DD/YYYY', fix: 'Enter date as MM/DD/YYYY. Example: 01/20/2024. Various date formats are auto-converted.' },
   year: { rule: 'Required — must be GREATER than the BIN year (PSGC-YEAR-INC)', fix: 'Enter the application year (e.g. 2026). IMPORTANT: this year must be GREATER than the year in the BIN. Example: if BIN is 0201514-2025-0000001 then year must be 2026 or later. The main system enforces: year > BIN year.' },
@@ -467,8 +467,8 @@ const schemas = {
   year: { required: true, label: 'Year' }
 },
     HINTS: {
-  business_bin: { rule: 'BIN Format: PSGC7-YEAR4-INC7', fix: 'Use format: 7-digit PSGC code + dash + 4-digit year + dash + 7-digit increment. Example: 0300801-2024-0000001' },
-  application_or_no: { rule: 'Required, non-empty alphanumeric', fix: 'Enter the application OR number. Must be a non-empty alphanumeric string. Example: U12345678' },
+  business_bin: { rule: 'BIN Format: PSGC7-YEAR4-INC7 — must exist in Business sheet when Business is loaded', fix: 'Must match a BIN in the Business sheet when that sheet is loaded and validated. Example: 0300801-2024-0000001' },
+  application_or_no: { rule: 'Required — must exist in Application or_no when Application is loaded', fix: 'Enter the OR number from the Application sheet. When Application is loaded and validated, this must match an existing or_no. Example: U12345678' },
   code: { rule: 'Required, 2-20 alphanumeric characters', fix: 'Enter the fee code (2-20 chars). Spaces will be auto-stripped. Example: GF-01' },
   description: { rule: 'Required, 2-100 characters', fix: 'Enter a fee description between 2 and 100 characters. Example: Garbage Fee' },
   amount: { rule: 'Required, non-negative number (AMOUNT, not percentage)', fix: 'Enter the fee amount as a raw number. DO NOT use percentages. Non-numeric characters will be stripped.' },
@@ -488,7 +488,7 @@ const schemas = {
 
 // --- STATE MANAGEMENT ---
 // --- STATE MANAGEMENT ---
-let MasterStore = { validBINs: new Set() };
+let MasterStore = { validBINs: new Set(), validORs: new Set() };
 let auditLog = []; // { table, row, type, message }
 
 let appState = {
@@ -1511,11 +1511,21 @@ function customValidateRow(tableId, row, errs, seenLists) {
             }
         }
         
-        // CROSS-TABLE REFERENTIAL INTEGRITY
+        // CROSS-TABLE: BIN → Business (only when Business is loaded + validated)
         if (appState['table1'].loaded && appState['table1'].hasValidated) {
             let normBin = normalizeBIN(bin);
             if (normBin && !MasterStore.validBINs.has(normBin)) {
-                errs[binKey] = 'BIN not found in Table 1 MasterStore';
+                errs[binKey] = 'BIN not found in Business sheet';
+            }
+        }
+    }
+
+    // CROSS-TABLE: Fee OR → Application (only when Application is loaded + validated)
+    if (tableId === 'table4') {
+        let orNo = g('application_or_no');
+        if (appState['table3'].loaded && appState['table3'].hasValidated) {
+            if (orNo && !MasterStore.validORs.has(orNo)) {
+                errs.application_or_no = 'OR not found in Application sheet';
             }
         }
     }
@@ -1722,9 +1732,26 @@ document.getElementById('closeDupModal').addEventListener('click', () => {
     finalizeValidation(activeTableId);
 });
 
+const VALIDATE_ORDER = ['table1', 'table2', 'table3', 'table4'];
+
+function emitCrossTableTips(tableId) {
+    const tips = [];
+    const needsBinParent = tableId === 'table2' || tableId === 'table3' || tableId === 'table4';
+    if (needsBinParent && !(appState.table1.loaded && appState.table1.hasValidated)) {
+        tips.push('Tip: Cross-table BIN check is off until you load and validate the Business sheet.');
+    }
+    if (tableId === 'table4' && !(appState.table3.loaded && appState.table3.hasValidated)) {
+        tips.push('Tip: Cross-table OR check is off until you load and validate the Application sheet.');
+    }
+    tips.forEach(msg => {
+        auditLog.push({ table: tableId, row: 'System', type: 'INFO', message: msg });
+    });
+    return tips;
+}
+
 document.getElementById('validateBtn').addEventListener('click', () => {
-    Object.keys(appState).forEach(tid => {
-        if(appState[tid].loaded) executeValidation(tid);
+    VALIDATE_ORDER.forEach(tid => {
+        if (appState[tid].loaded) executeValidation(tid);
     });
 });
 
@@ -1747,8 +1774,26 @@ function executeValidation(tableId) {
 function finalizeValidation(tableId) {
     let st = appState[tableId];
     let seenLists = {};
+    let crossTips = emitCrossTableTips(tableId);
     
     if (tableId === 'table1') MasterStore.validBINs.clear();
+    if (tableId === 'table3') MasterStore.validORs.clear();
+
+    // Build parent stores before row checks so same-pass dependents see fresh data
+    if (tableId === 'table1') {
+        st.rows.forEach(row => {
+            if (!row) return;
+            let bin = normalizeBIN(row['bin']);
+            if (bin) MasterStore.validBINs.add(bin);
+        });
+    }
+    if (tableId === 'table3') {
+        st.rows.forEach(row => {
+            if (!row) return;
+            let orNo = (row['or_no'] == null ? '' : String(row['or_no'])).trim();
+            if (orNo) MasterStore.validORs.add(orNo);
+        });
+    }
 
     st.rows.forEach((row, idx) => {
         if(!row) return;
@@ -1756,18 +1801,16 @@ function finalizeValidation(tableId) {
         if (Object.keys(errs).length > 0) {
             st.cellErrors[idx] = errs;
         }
-        if (tableId === 'table1') {
-            let bin = normalizeBIN(row['bin']);
-            if (bin) {
-                MasterStore.validBINs.add(bin);
-            }
-        }
     });
     
     if(tableId === activeTableId) {
         currentPage = 1;
         renderTable();
         updateStatusUI();
+        if (crossTips.length > 0) {
+            const s = document.getElementById('status');
+            s.innerHTML = (s.innerHTML ? s.innerHTML + '<br>' : '') + crossTips.map(t => escapeHtml(t)).join('<br>');
+        }
         document.getElementById('exportBtn').style.display = 'inline-flex';
         document.getElementById('exportAuditBtn').style.display = auditLog.length > 0 ? 'inline-flex' : 'none';
     }
