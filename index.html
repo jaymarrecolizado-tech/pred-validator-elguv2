@@ -1,0 +1,2029 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BPLS Universal Migration Validator - Enterprise</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+:root {
+  --bg-color: #f8fafc;
+  --text-color: #0f172a;
+  --panel-bg: #fff;
+  --border-color: #e2e8f0;
+  --header-bg: #f8fafc;
+  --input-bg: transparent;
+  --input-hover: #fff;
+  --row-hover: #f8fafc;
+  --err-bg: #fef2f2;
+  --err-hover: #fee2e2;
+  --err-text: #b91c1c;
+  --err-border: #ef4444;
+  --ok-bg: #ecfdf5;
+  --ok-text: #047857;
+  --ok-border: #10b981;
+  --auto-bg: #eff6ff;
+  --auto-text: #1d4ed8;
+  --auto-border: #3b82f6;
+  --toolbar-bg: #fff;
+  --btn-text: #fff;
+  --tab-bg: #e2e8f0;
+  --tab-active: #4361ee;
+  --tab-active-text: #fff;
+  --tab-text: #475569;
+}
+[data-theme="dark"] {
+  --bg-color: #0f172a;
+  --text-color: #f8fafc;
+  --panel-bg: #1e293b;
+  --border-color: #334155;
+  --header-bg: #0f172a;
+  --input-bg: #1e293b;
+  --input-hover: #334155;
+  --row-hover: #1e293b;
+  --err-bg: #450a0a;
+  --err-hover: #7f1d1d;
+  --err-text: #fca5a5;
+  --err-border: #ef4444;
+  --ok-bg: #064e3b;
+  --ok-text: #6ee7b7;
+  --ok-border: #10b981;
+  --auto-bg: #1e3a8a;
+  --auto-text: #93c5fd;
+  --auto-border: #3b82f6;
+  --toolbar-bg: #1e293b;
+  --tab-bg: #334155;
+  --tab-active: #3b82f6;
+  --tab-active-text: #fff;
+  --tab-text: #cbd5e1;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg-color);padding:20px;color:var(--text-color);transition: background 0.3s, color 0.3s;}
+.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+h2{font-size:24px;display:flex;align-items:center;gap:10px}
+.badge{background:var(--tab-active);color:var(--tab-active-text);font-size:12px;padding:3px 8px;border-radius:12px}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:15px;background:var(--toolbar-bg);padding:16px;border-radius:10px;box-shadow:0 2px 4px rgba(0,0,0,.05);border:1px solid var(--border-color)}
+.toolbar label{font-weight:600;font-size:14px;margin-right:10px}
+.toolbar select, .toolbar input[type=file]{padding:8px;border:1px solid var(--border-color);border-radius:6px;font-size:14px;background:var(--panel-bg);color:var(--text-color)}
+.btn{padding:9px 18px;border:none;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:6px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-primary{background:#4361ee;color:#fff}
+.btn-primary:hover:not(:disabled){background:#3a56d4}
+.btn-success{background:#10b981;color:#fff}
+.btn-success:hover:not(:disabled){background:#059669}
+.btn-warning{background:#f59e0b;color:#fff}
+.btn-warning:hover:not(:disabled){background:#d97706}
+.btn-outline{background:transparent;border:1px solid var(--tab-active);color:var(--tab-active)}
+.btn-outline:hover:not(:disabled){background:var(--row-hover)}
+
+.tabs {display:flex; gap:5px; margin-bottom:15px;}
+.tab {padding:10px 20px; background:var(--tab-bg); color:var(--tab-text); border-radius:8px 8px 0 0; cursor:pointer; font-weight:600; border:1px solid var(--border-color); border-bottom:none;}
+.tab.active {background:var(--tab-active); color:var(--tab-active-text); border-color:var(--tab-active);}
+.tab.disabled {opacity:0.5; cursor:not-allowed;}
+
+#status{padding:12px 16px;border-radius:8px;font-size:14px;font-weight:500;margin-bottom:15px;transition:all .3s}
+.status-info{background:var(--auto-bg);color:var(--auto-text);border-left:4px solid var(--auto-border)}
+.status-ok{background:var(--ok-bg);color:var(--ok-text);border-left:4px solid var(--ok-border)}
+.status-err{background:var(--err-bg);color:var(--err-text);border-left:4px solid var(--err-border)}
+.status-warn{background:#fffbeb;color:#b45309;border-left:4px solid #f59e0b}
+
+.panels{display:grid;grid-template-columns:1fr;gap:15px;margin-bottom:15px}
+.panel{background:var(--panel-bg);border-radius:10px;padding:15px;box-shadow:0 2px 4px rgba(0,0,0,.05);display:none;max-height:250px;overflow-y:auto;border:1px solid var(--border-color)}
+.panel h4{margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.panel.summary h4{color:var(--err-text)}
+.panel.autocorrect-log h4{color:var(--auto-text)}
+.err-row, .ac-row{padding:6px 0;border-bottom:1px solid var(--border-color);font-size:13px;line-height:1.4}
+.err-row{color:var(--err-text)}
+.ac-row{color:var(--auto-text)}
+
+.table-wrap{overflow:auto;max-height:60vh;background:var(--panel-bg);border-radius:10px;box-shadow:0 4px 6px rgba(0,0,0,.05);border:1px solid var(--border-color)}
+table{border-collapse:separate;border-spacing:0;font-size:13px;table-layout:auto;width:100%;}
+thead th{background:var(--header-bg);color:var(--text-color);padding:10px 12px;position:sticky;top:0;z-index:10;text-align:left;white-space:nowrap;font-weight:600;border-bottom:2px solid var(--border-color)}
+thead th.row-num{width:50px;text-align:center;background:var(--header-bg);position:sticky;left:0;z-index:11}
+tbody td{padding:4px 6px;border-bottom:1px solid var(--border-color);vertical-align:middle;position:relative}
+tbody td.row-num{background:var(--header-bg);text-align:center;color:var(--text-color);font-weight:600;font-size:12px;position:sticky;left:0;z-index:9;border-right:1px solid var(--border-color)}
+tbody tr:hover td{background:var(--row-hover)}
+tbody tr.has-error{background:var(--err-bg)}
+tbody tr.has-error:hover td:not(.row-num){background:var(--err-hover)}
+
+.cell-input{width:100%;border:1px solid transparent;padding:6px 8px;font-size:13px;border-radius:4px;background:var(--input-bg);color:var(--text-color);font-family:inherit;min-width:140px;transition:all .15s;}
+.cell-input:hover{border-color:var(--border-color);background:var(--input-hover)}
+.cell-input:focus{outline:none;border-color:var(--auto-border);background:var(--input-hover);box-shadow:0 0 0 3px rgba(59,130,246,.1)}
+.cell-input.cell-err{border-color:var(--err-border);background:var(--err-bg);color:var(--err-text)}
+.cell-input.cell-ok{border-color:var(--ok-border);background:var(--ok-bg);color:var(--ok-text)}
+.cell-input.cell-autocorrected{border-color:var(--auto-border);background:var(--auto-bg);color:var(--auto-text)}
+select.cell-input{appearance:auto;cursor:pointer;min-width:120px;padding-right:4px;}
+input[type="date"].cell-input{min-width:150px;cursor:pointer;}
+td[title]:not([title=""]):hover::after{content:attr(title);position:fixed;background:#1e293b;color:#f8fafc;padding:6px 10px;border-radius:6px;font-size:12px;z-index:9999;max-width:280px;white-space:pre-wrap;box-shadow:0 4px 12px rgba(0,0,0,.3);pointer-events:none;}
+
+.pagination {display:flex; justify-content:space-between; align-items:center; margin-top:10px; background:var(--panel-bg); padding:10px 15px; border-radius:8px; border:1px solid var(--border-color);}
+
+.legend{display:flex;gap:15px;font-size:13px;color:var(--text-color);margin-top:15px;flex-wrap:wrap;background:var(--panel-bg);padding:10px 15px;border-radius:8px;border:1px solid var(--border-color)}
+.legend span{display:flex;align-items:center;gap:6px}
+.legend .dot{width:12px;height:12px;border-radius:50%;display:inline-block}
+.dot-err{background:#ef4444}
+.dot-ok{background:#10b981}
+.dot-neutral{background:#cbd5e1}
+.dot-auto{background:#3b82f6}
+
+/* Modal */
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(15,23,42,.6);backdrop-filter:blur(2px);display:none;z-index:1000;justify-content:center;align-items:center}
+.modal{background:var(--panel-bg);width:800px;max-width:90vw;border-radius:12px;box-shadow:0 20px 25px -5px rgba(0,0,0,.1);display:flex;flex-direction:column;max-height:90vh}
+.modal-header{padding:16px 20px;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center}
+.modal-title{font-size:18px;font-weight:600}
+.modal-close{background:transparent;border:none;font-size:24px;cursor:pointer;color:var(--text-color)}
+.modal-body{padding:20px;overflow-y:auto;flex:1}
+.modal-footer{padding:16px 20px;border-top:1px solid var(--border-color);display:flex;justify-content:flex-end;gap:10px}
+textarea.json-editor{width:100%;height:400px;font-family:monospace;font-size:13px;padding:12px;border:1px solid var(--border-color);border-radius:6px;resize:vertical;background:var(--input-bg);color:var(--text-color)}
+.tooltip-custom{position:absolute;background:#1e293b;color:#f8fafc;padding:8px 12px;border-radius:6px;font-size:12px;z-index:9999;pointer-events:none;max-width:300px;box-shadow:0 4px 6px rgba(0,0,0,.2);display:none}
+.tooltip-custom .err{color:#fca5a5;font-weight:600}
+.tooltip-custom .rule{color:#fde047;font-size:11px;margin-top:4px}
+.tooltip-custom .hint{color:#86efac;font-size:11px;margin-top:4px;border-top:1px solid #334155;padding-top:4px}
+
+/* Dupes Modal Specific */
+.dup-container { display:flex; gap:15px; margin-bottom:20px; }
+.dup-card { flex:1; border:1px solid var(--border-color); border-radius:8px; padding:15px; background:var(--bg-color); }
+.dup-field { display:flex; justify-content:space-between; font-size:13px; border-bottom:1px solid var(--border-color); padding:4px 0;}
+.dup-field strong { color:#888; width:120px; flex-shrink:0;}
+
+/* LGU Selector Panel */
+.lgu-panel{background:linear-gradient(135deg,var(--panel-bg) 0%,rgba(59,130,246,.06) 100%);border:2px solid var(--auto-border);border-radius:12px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;flex-wrap:wrap;gap:12px}
+.lgu-panel label{font-weight:700;font-size:13px;color:var(--text-color);white-space:nowrap}
+.lgu-panel select{padding:7px 12px;border-radius:7px;border:1px solid var(--border-color);background:var(--input-bg);color:var(--text-color);font-size:13px;font-family:inherit;min-width:200px;cursor:pointer}
+.lgu-panel select:focus{outline:none;border-color:var(--auto-border);box-shadow:0 0 0 3px rgba(59,130,246,.15)}
+.psgc-badge{background:var(--auto-bg);color:var(--auto-text);border:1px solid var(--auto-border);border-radius:20px;padding:5px 14px;font-size:12px;font-weight:700;font-family:monospace;white-space:nowrap;letter-spacing:1px}
+.lgu-arrow{color:var(--text-color);opacity:.4;font-size:18px}
+</style>
+</head>
+<body>
+<div class="header">
+  <h2>BPLS Universal Migration Validator <span id="tableBadge" class="badge" style="display:none">Ready</span></h2>
+  <div style="display:flex; gap:10px;">
+      <button class="btn btn-outline" id="themeBtn">🌙 Dark Mode</button>
+      <button class="btn btn-outline" id="rulesBtn">⚙️ Edit Validation Rules</button>
+  </div>
+</div>
+
+<div class="toolbar">
+  <input type="file" id="csvFile" accept=".csv,.zip" multiple title="Select multiple CSVs to batch process">
+  
+  <button class="btn btn-warning" id="autocorrectBtn" disabled>🪄 Auto-Correct</button>
+  <button class="btn btn-primary" id="validateBtn" disabled>🔍 Validate All</button>
+  <button class="btn btn-success" id="exportBtn" style="display:none">📥 Export Current CSV</button>
+  <button class="btn btn-outline" id="exportAuditBtn" style="display:none">📝 Export Audit Log (CSV)</button>
+</div>
+
+<!-- LGU Selection Panel -->
+<div class="lgu-panel">
+  <span style="font-size:20px">📍</span>
+  <label for="provinceSelect">Select LGU Province:</label>
+  <select id="provinceSelect">
+    <option value="">-- Select Province --</option>
+    <option value="batanes">Batanes</option>
+    <option value="cagayan">Cagayan</option>
+    <option value="isabela">Isabela</option>
+    <option value="nueva_vizcaya">Nueva Vizcaya</option>
+    <option value="quirino">Quirino</option>
+  </select>
+  <span class="lgu-arrow">›</span>
+  <label for="municipalitySelect">Municipality / City:</label>
+  <select id="municipalitySelect" disabled>
+    <option value="">-- Select Municipality --</option>
+  </select>
+  <span class="lgu-arrow">›</span>
+  <div id="psgcDisplay" style="display:none;display:flex;align-items:center;gap:8px;">
+    <span style="font-size:12px;color:var(--text-color);opacity:.7">BIN PSGC Prefix:</span>
+    <span class="psgc-badge" id="psgcBadge">─</span>
+  </div>
+  <span id="lguClearBtn" style="cursor:pointer;font-size:18px;opacity:.5;display:none;margin-left:auto" title="Clear selection">✕</span>
+</div>
+
+<div class="tabs" id="tabContainer">
+    <div class="tab active disabled" data-target="table1">Table 1 (Businesses)</div>
+    <div class="tab disabled" data-target="table2">Table 2 (Activity)</div>
+    <div class="tab disabled" data-target="table3">Table 3 (Application)</div>
+    <div class="tab disabled" data-target="table4">Table 4 (Fee)</div>
+</div>
+
+<div id="status" class="status-info">Upload one or multiple CSV files to begin validation.</div>
+
+<div class="panels">
+  <div id="errorSummary" class="panel summary"></div>
+  <div id="autocorrectLog" class="panel autocorrect-log"></div>
+</div>
+
+<div id="tableContainer"></div>
+<div class="pagination" id="paginationBar" style="display:none;">
+    <button class="btn btn-outline" id="prevPage">◀ Previous</button>
+    <span id="pageInfo">Page 1 of 1</span>
+    <button class="btn btn-outline" id="nextPage">Next ▶</button>
+</div>
+
+<div class="legend">
+  <span><span class="dot dot-err"></span> Error</span>
+  <span><span class="dot dot-auto"></span> Auto-corrected</span>
+  <span><span class="dot dot-ok"></span> Valid</span>
+  <span><span class="dot dot-neutral"></span> Not validated</span>
+  <span style="color:#ef4444;font-weight:700">*</span> Required
+  <span style="color:#94a3b8">opt</span> Optional
+</div>
+
+<div style="text-align: center; margin-top: 30px; margin-bottom: 20px; font-size: 13px; color: var(--text-color); opacity: 0.7; font-weight: 500;">
+  &copy; Copyright and creator JE Lite
+</div>
+
+<!-- Rules Editor Modal -->
+<div class="modal-overlay" id="rulesModal">
+  <div class="modal">
+    <!-- rules modal content ... -->
+    <div class="modal-header">
+      <div class="modal-title">Validation Rules Editor</div>
+      <button class="modal-close" id="closeModal">&times;</button>
+    </div>
+    <div class="modal-body">
+      <select id="rulesTableSelect" style="margin-bottom:10px;padding:6px;border-radius:4px;background:var(--input-bg);color:var(--text-color);">
+        <option value="table1">Table 1 (Businesses)</option>
+        <option value="table2">Table 2 (Activity)</option>
+        <option value="table3">Table 3 (Application)</option>
+        <option value="table4">Table 4 (Fee)</option>
+      </select>
+      <textarea id="rulesEditor" class="json-editor"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" id="resetRules">↺ Reset</button>
+      <button class="btn btn-primary" id="saveRules">💾 Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Deduplication Modal -->
+<div class="modal-overlay" id="dupModal">
+  <div class="modal" style="width:900px;">
+    <div class="modal-header">
+      <div class="modal-title" style="color:var(--err-text)">⚠ Duplicate Detected</div>
+      <button class="modal-close" id="closeDupModal">&times;</button>
+    </div>
+    <div class="modal-body" id="dupModalBody">
+      <p style="margin-bottom:15px;">A duplicate identifier was found. Please choose which record to keep.</p>
+      <div class="dup-container" id="dupCards"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" id="skipDup">Skip for now</button>
+    </div>
+  </div>
+</div>
+
+<div id="customTooltip" class="tooltip-custom"></div>
+
+<script>
+// --- SCHEMAS INJECTED HERE ---
+const schemas = {
+  table1: {
+    RULES: {
+  bin: { required: true, label: 'BIN' },
+  business_name: { required: true, label: 'Business Name', min: 3, max: 100 },
+  trade_name: { required: false, label: 'Trade Name', min: 3, max: 100 },
+  business_type: {
+    required: true, label: 'Business Type',
+    allowed: ['SOLE PROPRIETORSHIP','ONE PERSON CORPORATION','PARTNERSHIP','CORPORATION','COOPERATIVE']
+  },
+  dti_no: { required: false, conditional: true, label: 'DTI No.', min: 3, max: 30 },
+  dti_registration_expiry_date: { required: false, conditional: true, label: 'DTI Expiry Date' },
+  sec_no: { required: false, conditional: true, label: 'SEC No.', min: 3, max: 30 },
+  cda_no: { required: false, conditional: true, label: 'CDA No.', min: 3, max: 30 },
+  tin_no: { required: false, label: 'TIN No.' },
+  email_address: { required: true, label: 'Email Address', min: 3, max: 100 },
+  cellphone_no: { required: true, label: 'Cellphone No.' },
+  telephone_no: { required: false, label: 'Telephone No.', min: 3, max: 20 },
+  incharge_first_name: { required: true, label: 'First Name', min: 3, max: 100 },
+  incharge_middle_name: { required: false, label: 'Middle Name', min: 3, max: 100 },
+  incharge_last_name: { required: true, label: 'Last Name', min: 3, max: 100 },
+  incharge_extension_name: { required: false, label: 'Ext. Name', min: 3, max: 100 },
+  incharge_sex: { required: true, label: 'Sex', allowed: ['M','F'] },
+  incharge_country_of_citizenship: { required: true, label: 'Citizenship', min: 3, max: 100 },
+  incharge_street: { required: false, label: 'Incharge Street', min: 3, max: 100 },
+  incharge_barangay: { required: true, label: 'Incharge Barangay', min: 3, max: 100 },
+  incharge_municipality: { required: true, label: 'Incharge Municipality', min: 3, max: 100 },
+  incharge_province: { required: true, label: 'Incharge Province', min: 3, max: 100 },
+  office_street: { required: false, label: 'Office Street', min: 3, max: 100 },
+  office_barangay_code: { required: true, label: 'Office Brgy Code' },
+  location_owned: { required: true, label: 'Location Owned', allowed: ['0', '1'] },
+  tdn_no: { required: false, conditional: true, label: 'TDN No.', min: 3, max: 20 },
+  pin_no: { required: false, conditional: true, label: 'PIN No.', min: 3, max: 20 },
+  lessor_name: { required: false, conditional: true, label: 'Lessor Name', min: 3, max: 150 },
+  monthly_rental: { required: false, conditional: true, label: 'Monthly Rental', numeric: true },
+  floor_area: { required: true, label: 'Floor Area', numeric: true },
+  area: { required: true, label: 'Area', numeric: true },
+  no_of_male_employees: { required: true, label: 'Male Employees', numeric: true },
+  no_of_female_employees: { required: true, label: 'Female Employees', numeric: true },
+  no_of_employees_residing_within_the_area: { required: true, label: 'Residing Employees', numeric: true },
+  no_of_van: { required: true, label: 'Vans', numeric: true },
+  no_of_truck: { required: true, label: 'Trucks', numeric: true },
+  no_of_motorcycle: { required: true, label: 'Motorcycles', numeric: true },
+  activity_type: { required: true, label: 'Activity Type', min: 3, max: 100 }
+},
+    HINTS: {
+  bin: { rule: 'BIN Format: PSGC7-YEAR4-INC7', fix: 'Use format: 7-digit PSGC code + dash + 4-digit year + dash + 7-digit increment. Example: 1400101-2024-0000001' },
+  business_name: { rule: 'Required, 3-100 characters', fix: 'Enter the full registered business name. Must be at least 3 characters, max 100.' },
+  trade_name: { rule: 'Optional, 3-100 characters if provided', fix: 'Leave blank or enter a trade/brand name between 3-100 characters.' },
+  business_type: { rule: 'Must be one of 5 allowed types', fix: 'Use exactly: SOLE PROPRIETORSHIP, ONE PERSON CORPORATION, PARTNERSHIP, CORPORATION, or COOPERATIVE' },
+  dti_no: { rule: 'Required if SOLE PROPRIETORSHIP', fix: 'Enter DTI registration number (3-30 chars). Required when Business Type is SOLE PROPRIETORSHIP.' },
+  dti_registration_expiry_date: { rule: 'Required if SOLE PROPRIETORSHIP, format MM/DD/YYYY', fix: 'Enter date as MM/DD/YYYY. Example: 12/31/2025. Required when Business Type is SOLE PROPRIETORSHIP.' },
+  sec_no: { rule: 'Required for OPC/PARTNERSHIP/CORPORATION', fix: 'Enter SEC registration number (3-30 chars). Required when Business Type is ONE PERSON CORPORATION, PARTNERSHIP, or CORPORATION.' },
+  cda_no: { rule: 'Required if COOPERATIVE', fix: 'Enter CDA registration number (3-30 chars). Required when Business Type is COOPERATIVE.' },
+  tin_no: { rule: 'Optional, format 000-000-000-00000', fix: 'Enter TIN as 000-000-000-00000 (3-3-3-5 digits). Example: 123-456-789-00001' },
+  email_address: { rule: 'Required, valid email format', fix: 'Enter a valid email address. Example: business@email.com. Spaces are not allowed.' },
+  cellphone_no: { rule: 'Required, 12 digits starting with 639', fix: 'Enter as 639xxxxxxxxx (12 digits). The system auto-converts 09xx and 9xx formats.' },
+  telephone_no: { rule: 'Optional, 3-20 characters', fix: 'Leave blank or enter landline number between 3-20 characters.' },
+  incharge_first_name: { rule: 'Required, min 3 characters', fix: 'Enter the first name of the person in charge (at least 3 characters).' },
+  incharge_middle_name: { rule: 'Optional, min 3 characters if provided', fix: 'Leave blank or enter middle name (at least 3 characters).' },
+  incharge_last_name: { rule: 'Required, min 3 characters', fix: 'Enter the last name/surname of the person in charge (at least 3 characters).' },
+  incharge_extension_name: { rule: 'Optional, min 3 characters if provided', fix: 'Leave blank or enter extension like JR, SR, III. Periods are auto-removed.' },
+  incharge_sex: { rule: 'Required, must be M or F', fix: 'Enter M for Male or F for Female. The system auto-converts MALE/FEMALE.' },
+  incharge_country_of_citizenship: { rule: 'Required, min 3 characters', fix: 'Enter country of citizenship. Example: Filipino, American, Chinese' },
+  incharge_street: { rule: 'Optional, min 3 characters if provided', fix: 'Leave blank or enter street address (at least 3 characters).' },
+  incharge_barangay: { rule: 'Required, min 3 characters', fix: 'Enter the barangay of the person in charge (at least 3 characters).' },
+  incharge_municipality: { rule: 'Required, min 3 characters', fix: 'Enter the municipality/city of the person in charge (at least 3 characters).' },
+  incharge_province: { rule: 'Required, min 3 characters', fix: 'Enter the province of the person in charge (at least 3 characters).' },
+  office_street: { rule: 'Optional, min 3 characters if provided', fix: 'Leave blank or enter office street address (at least 3 characters).' },
+  office_barangay_code: { rule: 'Required', fix: 'Enter the PSGC barangay code for the business office location.' },
+  location_owned: { rule: 'Required, must be 1 (owned) or 0 (rented)', fix: 'Enter 1 if the business location is owned, or 0 if rented. Auto-converts: yes/true/owned → 1, no/false/rented → 0.' },
+  tdn_no: { rule: 'Required for owned (location_owned=1), 3-20 chars', fix: 'Enter Tax Declaration Number. Required when location is owned, unless PIN is provided.' },
+  pin_no: { rule: 'Required for owned (location_owned=1), 3-20 chars', fix: 'Enter Property Identification Number. Required when location is owned, unless TDN is provided.' },
+  lessor_name: { rule: 'Required for rented (location_owned=0), 3-150 chars', fix: 'Enter the name of the lessor/property owner. Required when location is rented.' },
+  monthly_rental: { rule: 'Required for rented (location_owned=0), non-negative number', fix: 'Enter the monthly rental amount as a whole number. Required when location is rented.' },
+  floor_area: { rule: 'Required, non-negative number', fix: 'Enter the total floor area of the establishment as a whole number.' },
+  area: { rule: 'Required, non-negative number, must not exceed floor_area', fix: 'Enter the business area in square meters. Must be less than or equal to Floor Area.' },
+  no_of_male_employees: { rule: 'Required, non-negative number', fix: 'Enter the count of male employees (whole number, 0 or more).' },
+  no_of_female_employees: { rule: 'Required, non-negative number', fix: 'Enter the count of female employees (whole number, 0 or more).' },
+  no_of_employees_residing_within_the_area: { rule: 'Required, cannot exceed total employees', fix: 'Enter count of employees residing in the business area. Must not exceed Male + Female employees combined.' },
+  no_of_van: { rule: 'Required, non-negative number', fix: 'Enter the number of vans owned/used by the business (whole number, 0 or more).' },
+  no_of_truck: { rule: 'Required, non-negative number', fix: 'Enter the number of trucks owned/used by the business (whole number, 0 or more).' },
+  no_of_motorcycle: { rule: 'Required, non-negative number', fix: 'Enter the number of motorcycles owned/used by the business (whole number, 0 or more).' },
+  activity_type: { rule: 'Required, min 3 characters', fix: 'Enter the type of business activity. Example: Retail, Wholesale, Manufacturing, Food Service' }
+},
+    FIELD_ORDER: [
+  'bin','business_name','trade_name','business_type',
+  'dti_no','dti_registration_expiry_date','sec_no','cda_no','tin_no',
+  'email_address','cellphone_no','telephone_no',
+  'incharge_first_name','incharge_middle_name','incharge_last_name','incharge_extension_name',
+  'incharge_sex','incharge_country_of_citizenship','incharge_street',
+  'incharge_barangay','incharge_municipality','incharge_province',
+  'office_street','office_barangay_code','location_owned',
+  'tdn_no','pin_no','lessor_name','monthly_rental',
+  'floor_area','area','no_of_male_employees','no_of_female_employees',
+  'no_of_employees_residing_within_the_area',
+  'no_of_van','no_of_truck','no_of_motorcycle','activity_type'
+],
+    DATE_FIELDS: ['dti_registration_expiry_date']
+  },
+  table2: {
+    RULES: {
+  bin: { required: true, label: 'BIN' },
+  business_line_code: { required: true, label: 'Business Line Code', numeric: true },
+  capital_amount: { required: true, label: 'Capital Amount', numeric: true },
+  gross_amount: { required: true, label: 'Gross Amount', numeric: true },
+  gross_amount_essential: { required: true, label: 'Gross Essential', numeric: true },
+  gross_amount_nonessential: { required: true, label: 'Gross Non-Essential', numeric: true },
+  retired_date: { required: false, label: 'Retired Date' }
+},
+    HINTS: {
+  bin: { rule: 'BIN Format: PSGC7-YEAR4-INC7', fix: 'Use format: 7-digit PSGC code + dash + 4-digit year + dash + 7-digit increment. Example: 1400101-2024-0000001' },
+  business_line_code: { rule: 'Required, numeric', fix: 'Enter a numeric business line code. Must exist in system.' },
+  capital_amount: { rule: 'Required, number', fix: 'Enter capital amount as a number. Use 0 if not applicable.' },
+  gross_amount: { rule: 'Required, number', fix: 'Enter gross amount as a number. Must not be blank.' },
+  gross_amount_essential: { rule: 'Required, number', fix: 'Enter essential gross amount as a number. Must not be blank.' },
+  gross_amount_nonessential: { rule: 'Required, number', fix: 'Enter nonessential gross amount as a number. Must not be blank.' },
+  retired_date: { rule: 'Optional, MM/DD/YYYY', fix: 'Enter date as MM/DD/YYYY. Example: 12/31/2025. Leave blank if not applicable.' }
+},
+    FIELD_ORDER: ['bin','business_line_code','capital_amount','gross_amount','gross_amount_essential','gross_amount_nonessential','retired_date'],
+    DATE_FIELDS: ['retired_date']
+  },
+  table3: {
+    RULES: {
+  business_bin: { required: true, label: 'Business BIN' },
+  application_type: { required: true, label: 'App. Type', allowed: ['N','R','Q'] },
+  application_date: { required: true, label: 'App. Date' },
+  year: { required: true, label: 'Year' },
+  qtr_from: { required: false, label: 'Qtr From', allowed: ['1','2','3','4'] },
+  qtr_to: { required: false, label: 'Qtr To', allowed: ['1','2','3','4'] },
+  amount: { required: true, label: 'Amount', numeric: true },
+  discount: { required: true, label: 'Discount', numeric: true },
+  surcharge: { required: true, label: 'Surcharge', numeric: true },
+  interest: { required: true, label: 'Interest', numeric: true },
+  total: { required: true, label: 'Total', numeric: true },
+  issued_date: { required: true, label: 'Issued Date' },
+  valid_until: { required: true, label: 'Valid Until' },
+  or_no: { required: true, label: 'OR No.' },
+  or_date: { required: true, label: 'OR Date' },
+  permit_no: { required: false, label: 'Permit No.' },
+  barangay_clearance_number: { required: false, label: 'Brgy Clearance No.' },
+  business_plate_number: { required: false, label: 'Plate No.' },
+  mode_of_payment: { required: true, label: 'Payment Mode', allowed: ['ONLINE','MANUAL'] }
+},
+    HINTS: {
+  business_bin: { rule: 'BIN Format: PSGC7-YEAR4-INC7', fix: 'Use format: 7-digit PSGC code + dash + 4-digit year + dash + 7-digit increment. Example: 1400101-2024-0000001' },
+  application_type: { rule: 'Must be N, R, or Q', fix: 'Enter N for NEW, R for RENEWAL, or Q for QUARTERLY. Spaces are auto-stripped, case auto-uppercased.' },
+  application_date: { rule: 'Required, format MM/DD/YYYY', fix: 'Enter date as MM/DD/YYYY. Example: 01/20/2024. Various date formats are auto-converted.' },
+  year: { rule: 'Required — must be GREATER than the BIN year (PSGC-YEAR-INC)', fix: 'Enter the application year (e.g. 2026). IMPORTANT: this year must be GREATER than the year in the BIN. Example: if BIN is 0201514-2025-0000001 then year must be 2026 or later. The main system enforces: year > BIN year.' },
+  qtr_from: { rule: 'Optional, must be 1, 2, 3, or 4', fix: 'Enter a quarter number (1-4). Leave blank if not applicable.' },
+  qtr_to: { rule: 'Optional, must be 1-4 and >= Qtr From', fix: 'Enter a quarter number (1-4). Must be greater than or equal to Qtr From if both are provided.' },
+  amount: { rule: 'Required, non-negative number (decimals allowed)', fix: 'Enter the base amount as a number. Non-numeric characters are auto-stripped.' },
+  discount: { rule: 'Required, non-negative number (decimals allowed)', fix: 'Enter the discount amount as a number. Non-numeric characters are auto-stripped.' },
+  surcharge: { rule: 'Required, non-negative number (decimals allowed)', fix: 'Enter the surcharge amount as a number. Non-numeric characters are auto-stripped.' },
+  interest: { rule: 'Required, non-negative number (decimals allowed)', fix: 'Enter the interest amount as a number. Non-numeric characters are auto-stripped.' },
+  total: { rule: 'Required, must equal Amount + Surcharge + Interest - Discount', fix: 'Must equal amount + surcharge + interest - discount. Auto-corrected if blank or wrong when other numeric fields are valid.' },
+  issued_date: { rule: 'Required, format MM/DD/YYYY', fix: 'Enter the issue date as MM/DD/YYYY. Example: 01/20/2024.' },
+  valid_until: { rule: 'Required, format MM/DD/YYYY, must be >= Issued Date', fix: 'Enter the expiration date as MM/DD/YYYY. Must be on or after the Issued Date.' },
+  or_no: { rule: 'Required — must be GLOBALLY UNIQUE in the main system', fix: 'Enter a unique Official Receipt number. ⚠️ This must not duplicate any OR No. already existing in the main system database — not just within this file. Duplicates within this file are auto-detected. Example: OR-2026-00001.' },
+  or_date: { rule: 'Required, format MM/DD/YYYY', fix: 'Enter the OR date as MM/DD/YYYY. Example: 01/20/2024.' },
+  permit_no: { rule: 'Optional — if provided, must be GLOBALLY UNIQUE in the main system', fix: 'Leave blank or enter the business permit number. ⚠️ If provided, must not duplicate any Permit No. already in the main system. Duplicates within this file are auto-detected. Example: BP-2026-00001.' },
+  barangay_clearance_number: { rule: 'Optional — if provided, must be GLOBALLY UNIQUE in the main system', fix: 'Leave blank or enter the barangay clearance number. ⚠️ If provided, must not duplicate any clearance number already in the main system. Duplicates within this file are auto-detected. Example: BCN-2026-00001.' },
+  business_plate_number: { rule: 'Optional, alphanumeric if provided', fix: 'Leave blank or enter the business plate number (alphanumeric). Example: AA-0001.' },
+  mode_of_payment: { rule: 'Must be ONLINE or MANUAL', fix: 'Enter ONLINE or MANUAL. Case auto-uppercased. Example: ONLINE.' }
+},
+    FIELD_ORDER: [
+  'business_bin','application_type','application_date','year','qtr_from','qtr_to',
+  'amount','discount','surcharge','interest','total',
+  'issued_date','valid_until','or_no','or_date',
+  'permit_no','barangay_clearance_number','business_plate_number','mode_of_payment'
+],
+    DATE_FIELDS: ['application_date','issued_date','valid_until','or_date']
+  },
+  table4: {
+    RULES: {
+  business_bin: { required: true, label: 'Business BIN' },
+  application_or_no: { required: true, label: 'OR No.' },
+  code: { required: true, label: 'Fee Code', min: 2, max: 20 },
+  description: { required: true, label: 'Description', min: 2, max: 100 },
+  amount: { required: true, label: 'Amount', numeric: true },
+  discount: { required: true, label: 'Discount', numeric: true },
+  Interest: { required: true, label: 'Interest', numeric: true },
+  Surcharge: { required: true, label: 'Surcharge', numeric: true },
+  total: { required: true, label: 'Total', numeric: true },
+  type: { required: true, label: 'Fee Type', allowed: ['LICENSE','PERMIT','SANITARY','GARBAGE','FIXED','OTHER'] },
+  qtr_from: { required: true, label: 'Qtr From', allowed: ['1','2','3','4'] },
+  qtr_to: { required: true, label: 'Qtr To', allowed: ['1','2','3','4'] },
+  year: { required: true, label: 'Year' }
+},
+    HINTS: {
+  business_bin: { rule: 'BIN Format: PSGC7-YEAR4-INC7', fix: 'Use format: 7-digit PSGC code + dash + 4-digit year + dash + 7-digit increment. Example: 0300801-2024-0000001' },
+  application_or_no: { rule: 'Required, non-empty alphanumeric', fix: 'Enter the application OR number. Must be a non-empty alphanumeric string. Example: U12345678' },
+  code: { rule: 'Required, 2-20 alphanumeric characters', fix: 'Enter the fee code (2-20 chars). Spaces will be auto-stripped. Example: GF-01' },
+  description: { rule: 'Required, 2-100 characters', fix: 'Enter a fee description between 2 and 100 characters. Example: Garbage Fee' },
+  amount: { rule: 'Required, non-negative number (AMOUNT, not percentage)', fix: 'Enter the fee amount as a raw number. DO NOT use percentages. Non-numeric characters will be stripped.' },
+  discount: { rule: 'Required, non-negative number (AMOUNT, not percentage)', fix: 'Enter the discount AMOUNT as a number >= 0. DO NOT use percentages.' },
+  Interest: { rule: 'Required, non-negative number (AMOUNT, not percentage)', fix: 'Enter the interest AMOUNT as a number >= 0. DO NOT use percentages.' },
+  Surcharge: { rule: 'Required, non-negative number (AMOUNT, not percentage)', fix: 'Enter the surcharge AMOUNT as a number >= 0. DO NOT use percentages.' },
+  total: { rule: 'Required, must equal Amount + Surcharge + Interest - Discount', fix: 'Total is auto-calculated. If blank or wrong, auto-correct will fix it. Formula: amount + Surcharge + Interest - discount.' },
+  type: { rule: 'Must be one of: LICENSE, PERMIT, SANITARY, GARBAGE, FIXED, OTHER', fix: 'Enter the fee type. Will be auto-uppercased. Allowed: LICENSE, PERMIT, SANITARY, GARBAGE, FIXED, OTHER.' },
+  qtr_from: { rule: 'Required, must be 1, 2, 3, or 4', fix: 'Enter the starting quarter (1, 2, 3, or 4).' },
+  qtr_to: { rule: 'Required, must be 1-4 and >= Qtr From', fix: 'Enter the ending quarter (1, 2, 3, or 4). Must be greater than or equal to Qtr From.' },
+  year: { rule: 'Required, 4-digit year (1900-2100)', fix: 'Enter a 4-digit year between 1900 and 2100. Example: 2024' }
+},
+    FIELD_ORDER: ['business_bin','application_or_no','code','description','amount','discount','Interest','Surcharge','total','type','qtr_from','qtr_to','year'],
+    DATE_FIELDS: []
+  }
+};
+
+// --- STATE MANAGEMENT ---
+// --- STATE MANAGEMENT ---
+let MasterStore = { validBINs: new Set() };
+let auditLog = []; // { table, row, type, message }
+
+let appState = {
+    table1: { loaded: false, headers: [], rows: [], cellErrors: {}, autocorrectedCells: {}, hasValidated: false },
+    table2: { loaded: false, headers: [], rows: [], cellErrors: {}, autocorrectedCells: {}, hasValidated: false },
+    table3: { loaded: false, headers: [], rows: [], cellErrors: {}, autocorrectedCells: {}, hasValidated: false },
+    table4: { loaded: false, headers: [], rows: [], cellErrors: {}, autocorrectedCells: {}, hasValidated: false }
+};
+
+let activeTableId = 'table1';
+let currentPage = 1;
+const rowsPerPage = 100;
+let pendingDuplicates = []; // Array of { table, key, rowIndices }
+let selectedLGU = null; // { province, municipality, psgcPrefix }
+
+// ── REGION 2 PSGC DATABASE ──
+// BIN PSGC format: '0' + '20'(Region2) + 2-digit-province + 2-digit-municipality
+// Formula: psgcPrefix = '0' + '20' + provinceCode + municipalityCode
+const REGION2_LGUS = {
+    "batanes": {
+        "label": "Batanes",
+        "code": "09",
+        "municipalities": [
+            {
+                "name": "Basco",
+                "code": "01",
+                "psgc7": "0200901"
+            },
+            {
+                "name": "Itbayat",
+                "code": "02",
+                "psgc7": "0200902"
+            },
+            {
+                "name": "Ivana",
+                "code": "03",
+                "psgc7": "0200903"
+            },
+            {
+                "name": "Mahatao",
+                "code": "04",
+                "psgc7": "0200904"
+            },
+            {
+                "name": "Sabtang",
+                "code": "05",
+                "psgc7": "0200905"
+            },
+            {
+                "name": "Uyugan",
+                "code": "06",
+                "psgc7": "0200906"
+            }
+        ]
+    },
+    "cagayan": {
+        "label": "Cagayan",
+        "code": "15",
+        "municipalities": [
+            {
+                "name": "Abulug",
+                "code": "01",
+                "psgc7": "0201501"
+            },
+            {
+                "name": "Alcala",
+                "code": "02",
+                "psgc7": "0201502"
+            },
+            {
+                "name": "Allacapan",
+                "code": "03",
+                "psgc7": "0201503"
+            },
+            {
+                "name": "Amulung",
+                "code": "04",
+                "psgc7": "0201504"
+            },
+            {
+                "name": "Aparri",
+                "code": "05",
+                "psgc7": "0201505"
+            },
+            {
+                "name": "Baggao",
+                "code": "06",
+                "psgc7": "0201506"
+            },
+            {
+                "name": "Ballesteros",
+                "code": "07",
+                "psgc7": "0201507"
+            },
+            {
+                "name": "Buguey",
+                "code": "08",
+                "psgc7": "0201508"
+            },
+            {
+                "name": "Calayan",
+                "code": "09",
+                "psgc7": "0201509"
+            },
+            {
+                "name": "Camalaniugan",
+                "code": "10",
+                "psgc7": "0201510"
+            },
+            {
+                "name": "Claveria",
+                "code": "11",
+                "psgc7": "0201511"
+            },
+            {
+                "name": "Enrile",
+                "code": "12",
+                "psgc7": "0201512"
+            },
+            {
+                "name": "Gattaran",
+                "code": "13",
+                "psgc7": "0201513"
+            },
+            {
+                "name": "Gonzaga",
+                "code": "14",
+                "psgc7": "0201514"
+            },
+            {
+                "name": "Iguig",
+                "code": "15",
+                "psgc7": "0201515"
+            },
+            {
+                "name": "Lal-lo",
+                "code": "16",
+                "psgc7": "0201516"
+            },
+            {
+                "name": "Lasam",
+                "code": "17",
+                "psgc7": "0201517"
+            },
+            {
+                "name": "Pamplona",
+                "code": "18",
+                "psgc7": "0201518"
+            },
+            {
+                "name": "Peñablanca",
+                "code": "19",
+                "psgc7": "0201519"
+            },
+            {
+                "name": "Piat",
+                "code": "20",
+                "psgc7": "0201520"
+            },
+            {
+                "name": "Rizal",
+                "code": "21",
+                "psgc7": "0201521"
+            },
+            {
+                "name": "Sanchez-Mira",
+                "code": "22",
+                "psgc7": "0201522"
+            },
+            {
+                "name": "Santa Ana",
+                "code": "23",
+                "psgc7": "0201523"
+            },
+            {
+                "name": "Santa Praxedes",
+                "code": "24",
+                "psgc7": "0201524"
+            },
+            {
+                "name": "Santa Teresita",
+                "code": "25",
+                "psgc7": "0201525"
+            },
+            {
+                "name": "Santo Niño",
+                "code": "26",
+                "psgc7": "0201526"
+            },
+            {
+                "name": "Solana",
+                "code": "27",
+                "psgc7": "0201527"
+            },
+            {
+                "name": "Tuao",
+                "code": "28",
+                "psgc7": "0201528"
+            },
+            {
+                "name": "Tuguegarao City",
+                "code": "29",
+                "psgc7": "0201529"
+            }
+        ]
+    },
+    "isabela": {
+        "label": "Isabela",
+        "code": "31",
+        "municipalities": [
+            {
+                "name": "Alicia",
+                "code": "01",
+                "psgc7": "0203101"
+            },
+            {
+                "name": "Angadanan",
+                "code": "02",
+                "psgc7": "0203102"
+            },
+            {
+                "name": "Aurora",
+                "code": "03",
+                "psgc7": "0203103"
+            },
+            {
+                "name": "Benito Soliven",
+                "code": "04",
+                "psgc7": "0203104"
+            },
+            {
+                "name": "Burgos",
+                "code": "05",
+                "psgc7": "0203105"
+            },
+            {
+                "name": "Cabagan",
+                "code": "06",
+                "psgc7": "0203106"
+            },
+            {
+                "name": "Cabatuan",
+                "code": "07",
+                "psgc7": "0203107"
+            },
+            {
+                "name": "Cauayan City",
+                "code": "08",
+                "psgc7": "0203108"
+            },
+            {
+                "name": "Cordon",
+                "code": "09",
+                "psgc7": "0203109"
+            },
+            {
+                "name": "Dinapigue",
+                "code": "10",
+                "psgc7": "0203110"
+            },
+            {
+                "name": "Divilacan",
+                "code": "11",
+                "psgc7": "0203111"
+            },
+            {
+                "name": "Echague",
+                "code": "12",
+                "psgc7": "0203112"
+            },
+            {
+                "name": "Gamu",
+                "code": "13",
+                "psgc7": "0203113"
+            },
+            {
+                "name": "Ilagan City",
+                "code": "14",
+                "psgc7": "0203114"
+            },
+            {
+                "name": "Jones",
+                "code": "15",
+                "psgc7": "0203115"
+            },
+            {
+                "name": "Luna",
+                "code": "16",
+                "psgc7": "0203116"
+            },
+            {
+                "name": "Maconacon",
+                "code": "17",
+                "psgc7": "0203117"
+            },
+            {
+                "name": "Delfin Albano",
+                "code": "18",
+                "psgc7": "0203118"
+            },
+            {
+                "name": "Mallig",
+                "code": "19",
+                "psgc7": "0203119"
+            },
+            {
+                "name": "Naguilian",
+                "code": "20",
+                "psgc7": "0203120"
+            },
+            {
+                "name": "Palanan",
+                "code": "21",
+                "psgc7": "0203121"
+            },
+            {
+                "name": "Quezon",
+                "code": "22",
+                "psgc7": "0203122"
+            },
+            {
+                "name": "Quirino",
+                "code": "23",
+                "psgc7": "0203123"
+            },
+            {
+                "name": "Ramon",
+                "code": "24",
+                "psgc7": "0203124"
+            },
+            {
+                "name": "Reina Mercedes",
+                "code": "25",
+                "psgc7": "0203125"
+            },
+            {
+                "name": "Roxas",
+                "code": "26",
+                "psgc7": "0203126"
+            },
+            {
+                "name": "San Agustin",
+                "code": "27",
+                "psgc7": "0203127"
+            },
+            {
+                "name": "San Guillermo",
+                "code": "28",
+                "psgc7": "0203128"
+            },
+            {
+                "name": "San Isidro",
+                "code": "29",
+                "psgc7": "0203129"
+            },
+            {
+                "name": "San Manuel",
+                "code": "30",
+                "psgc7": "0203130"
+            },
+            {
+                "name": "San Mariano",
+                "code": "31",
+                "psgc7": "0203131"
+            },
+            {
+                "name": "San Mateo",
+                "code": "32",
+                "psgc7": "0203132"
+            },
+            {
+                "name": "San Pablo",
+                "code": "33",
+                "psgc7": "0203133"
+            },
+            {
+                "name": "Santa Maria",
+                "code": "34",
+                "psgc7": "0203134"
+            },
+            {
+                "name": "Santiago City",
+                "code": "35",
+                "psgc7": "0203135"
+            },
+            {
+                "name": "Santo Tomas",
+                "code": "36",
+                "psgc7": "0203136"
+            },
+            {
+                "name": "Tumauini",
+                "code": "37",
+                "psgc7": "0203137"
+            }
+        ]
+    },
+    "nueva_vizcaya": {
+        "label": "Nueva Vizcaya",
+        "code": "50",
+        "municipalities": [
+            {
+                "name": "Ambaguio",
+                "code": "01",
+                "psgc7": "0205001"
+            },
+            {
+                "name": "Aritao",
+                "code": "02",
+                "psgc7": "0205002"
+            },
+            {
+                "name": "Bagabag",
+                "code": "03",
+                "psgc7": "0205003"
+            },
+            {
+                "name": "Bambang",
+                "code": "04",
+                "psgc7": "0205004"
+            },
+            {
+                "name": "Bayombong",
+                "code": "05",
+                "psgc7": "0205005"
+            },
+            {
+                "name": "Diadi",
+                "code": "06",
+                "psgc7": "0205006"
+            },
+            {
+                "name": "Dupax del Norte",
+                "code": "07",
+                "psgc7": "0205007"
+            },
+            {
+                "name": "Dupax del Sur",
+                "code": "08",
+                "psgc7": "0205008"
+            },
+            {
+                "name": "Kasibu",
+                "code": "09",
+                "psgc7": "0205009"
+            },
+            {
+                "name": "Kayapa",
+                "code": "10",
+                "psgc7": "0205010"
+            },
+            {
+                "name": "Alfonso Castañeda",
+                "code": "11",
+                "psgc7": "0205011"
+            },
+            {
+                "name": "Santa Fe",
+                "code": "12",
+                "psgc7": "0205012"
+            },
+            {
+                "name": "Solano",
+                "code": "13",
+                "psgc7": "0205013"
+            },
+            {
+                "name": "Villaverde",
+                "code": "14",
+                "psgc7": "0205014"
+            },
+            {
+                "name": "Quezon",
+                "code": "15",
+                "psgc7": "0205015"
+            }
+        ]
+    },
+    "quirino": {
+        "label": "Quirino",
+        "code": "57",
+        "municipalities": [
+            {
+                "name": "Aglipay",
+                "code": "01",
+                "psgc7": "0205701"
+            },
+            {
+                "name": "Cabarroguis",
+                "code": "02",
+                "psgc7": "0205702"
+            },
+            {
+                "name": "Diffun",
+                "code": "03",
+                "psgc7": "0205703"
+            },
+            {
+                "name": "Maddela",
+                "code": "04",
+                "psgc7": "0205704"
+            },
+            {
+                "name": "Saguday",
+                "code": "05",
+                "psgc7": "0205705"
+            },
+            {
+                "name": "Nagtipunan",
+                "code": "06",
+                "psgc7": "0205706"
+            }
+        ]
+    }
+};
+
+function computePSGCPrefix(provinceKey, municipalityCode) {
+    if (!provinceKey || !municipalityCode) return null;
+    let prov = REGION2_LGUS[provinceKey];
+    if (!prov) return null;
+    let muni = prov.municipalities.find(m => m.code === municipalityCode);
+    if (!muni) return null;
+    return muni.psgc7;
+}
+
+
+
+
+// ── INPUT MASK HELPERS ──
+// TIN format: 000-000-000-00000  (3-3-3-5 digits, max 17 chars)
+function applyTINMask(val) {
+    let d = val.replace(/\D/g, '').substring(0, 14);
+    let out = d.substring(0, 3);
+    if (d.length > 3)  out += '-' + d.substring(3, 6);
+    if (d.length > 6)  out += '-' + d.substring(6, 9);
+    if (d.length > 9)  out += '-' + d.substring(9, 14);
+    return out;
+}
+// PIN format: 000-00-000-00-000  (3-2-3-2-3 digits, max 17 chars)
+function applyPINMask(val) {
+    let d = val.replace(/\D/g, '').substring(0, 13);
+    let out = d.substring(0, 3);
+    if (d.length > 3)  out += '-' + d.substring(3, 5);
+    if (d.length > 5)  out += '-' + d.substring(5, 8);
+    if (d.length > 8)  out += '-' + d.substring(8, 10);
+    if (d.length > 10) out += '-' + d.substring(10, 13);
+    return out;
+}
+
+
+// Dark mode logic
+let isDark = false;
+document.getElementById('themeBtn').addEventListener('click', () => {
+    isDark = !isDark;
+    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    document.getElementById('themeBtn').innerText = isDark ? '☀️ Light Mode' : '🌙 Dark Mode';
+});
+
+// ── LGU SELECTOR LOGIC ──
+document.getElementById('provinceSelect').addEventListener('change', function() {
+    let provKey = this.value;
+    let muniSel = document.getElementById('municipalitySelect');
+    muniSel.innerHTML = '<option value="">-- Select Municipality --</option>';
+    muniSel.disabled = !provKey;
+    document.getElementById('psgcDisplay').style.display = 'none';
+    document.getElementById('lguClearBtn').style.display = 'none';
+    selectedLGU = null;
+
+    if (provKey && REGION2_LGUS[provKey]) {
+        REGION2_LGUS[provKey].municipalities.forEach(m => {
+            let opt = document.createElement('option');
+            opt.value = m.code;
+            opt.textContent = m.name;
+            muniSel.appendChild(opt);
+        });
+    }
+});
+
+document.getElementById('municipalitySelect').addEventListener('change', function() {
+    let muniCode = this.value;
+    let provKey  = document.getElementById('provinceSelect').value;
+    if (!muniCode || !provKey) { selectedLGU = null; return; }
+
+    let psgcPrefix = computePSGCPrefix(provKey, muniCode);
+    let muniName   = REGION2_LGUS[provKey].municipalities.find(m => m.code === muniCode)?.name || '';
+    let provLabel  = REGION2_LGUS[provKey].label;
+
+    selectedLGU = { province: provKey, provinceLabel: provLabel, municipality: muniName, muniCode, psgcPrefix };
+
+    // Show PSGC badge
+    let badge = document.getElementById('psgcBadge');
+    badge.textContent = psgcPrefix;
+    let disp = document.getElementById('psgcDisplay');
+    disp.style.display = 'flex';
+    disp.style.alignItems = 'center';
+    disp.style.gap = '8px';
+    document.getElementById('lguClearBtn').style.display = 'inline';
+
+    // Show confirmation toast
+    document.getElementById('status').textContent =
+        `✅ LGU set: ${muniName}, ${provLabel} — BIN must start with ${psgcPrefix}`;
+    document.getElementById('status').className = 'status-success';
+});
+
+document.getElementById('lguClearBtn').addEventListener('click', () => {
+    document.getElementById('provinceSelect').value = '';
+    document.getElementById('municipalitySelect').innerHTML = '<option value="">-- Select Municipality --</option>';
+    document.getElementById('municipalitySelect').disabled = true;
+    document.getElementById('psgcDisplay').style.display = 'none';
+    document.getElementById('lguClearBtn').style.display = 'none';
+    selectedLGU = null;
+    document.getElementById('status').textContent = 'LGU selection cleared.';
+    document.getElementById('status').className = 'status-info';
+});
+
+document.getElementById('csvFile').addEventListener('change', (e) => {
+    const files = e.target.files;
+    if (!files.length) return;
+    
+    let filesProcessed = 0;
+    
+    Array.from(files).forEach(file => {
+        Papa.parse(file, {
+            header: true,
+            skipEmptyLines: "greedy",
+            complete: (results) => {
+                let headers = results.meta.fields || [];
+                let detectedId = detectTableType(headers);
+                
+                // ── HEADER NORMALIZATION ── Fix common CSV column name typos
+                const HEADER_ALIASES = {
+                    'dti_registratrion_expiry_date': 'dti_registration_expiry_date',
+                    'dti_registration_expiry': 'dti_registration_expiry_date',
+                    'dti_expiry_date': 'dti_registration_expiry_date',
+                    'dti_expiry': 'dti_registration_expiry_date'
+                };
+                let headerMap = {};
+                headers.forEach(h => {
+                    let normalized = HEADER_ALIASES[h.trim().toLowerCase()] || h.trim();
+                    headerMap[h] = normalized;
+                });
+                let normalizedHeaders = headers.map(h => headerMap[h]);
+                
+                let normalizedRows = results.data.map(row => {
+                    let newRow = {};
+                    Object.keys(row).forEach(k => {
+                        newRow[headerMap[k] || k] = row[k];
+                    });
+                    return newRow;
+                }).filter(row => {
+                    // Skip rows that are entirely empty, spaces, or literal "null"s
+                    return Object.values(row).some(val => {
+                        if (val === null || val === undefined) return false;
+                        let str = String(val).trim().toLowerCase();
+                        return str !== '' && str !== 'null';
+                    });
+                });
+                
+                appState[detectedId] = {
+                    loaded: true,
+                    headers: normalizedHeaders,
+                    rows: normalizedRows,
+                    cellErrors: {},
+                    autocorrectedCells: {},
+                    hasValidated: false
+                };
+                
+                let tab = document.querySelector(`.tab[data-target="${detectedId}"]`);
+                if(tab) tab.classList.remove('disabled');
+                
+                auditLog.push({table: detectedId, row: 'System', type: 'INFO', message: `Loaded ${results.data.length} rows.`});
+                
+                filesProcessed++;
+                if (filesProcessed === files.length) {
+                    // All files loaded. Auto-switch to table1 if loaded, or the first loaded.
+                    if (appState['table1'].loaded) switchTab('table1');
+                    else switchTab(detectedId);
+                    
+                    document.getElementById('validateBtn').disabled = false;
+                    document.getElementById('autocorrectBtn').disabled = false;
+                }
+            }
+        });
+    });
+});
+
+document.querySelectorAll('.tab').forEach(t => {
+    t.addEventListener('click', () => {
+        if (!t.classList.contains('disabled')) {
+            switchTab(t.dataset.target);
+        }
+    });
+});
+
+function switchTab(tableId) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    let tab = document.querySelector(`.tab[data-target="${tableId}"]`);
+    if(tab) tab.classList.add('active');
+    activeTableId = tableId;
+    currentPage = 1;
+    
+    document.getElementById('tableBadge').textContent = 'Mode: ' + activeTableId.toUpperCase();
+    document.getElementById('tableBadge').style.display = 'inline-block';
+    
+    let st = appState[activeTableId];
+    document.getElementById('exportBtn').style.display = st.hasValidated ? 'inline-flex' : 'none';
+    document.getElementById('exportAuditBtn').style.display = auditLog.length > 0 ? 'inline-flex' : 'none';
+    
+    renderTable();
+    updateStatusUI();
+}
+
+function detectTableType(csvHeaders) {
+  let joined = csvHeaders.join(',').toLowerCase();
+  if (joined.includes('dti_no') || joined.includes('business_type')) return 'table1';
+  if (joined.includes('business_line_code')) return 'table2';
+  if (joined.includes('application_type')) return 'table3';
+  if (joined.includes('application_or_no') || joined.includes('fee_code') || joined.includes('type')) return 'table4';
+  return 'table1'; 
+}
+
+function escapeHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function renderTable() {
+    const c = document.getElementById('tableContainer');
+    let st = appState[activeTableId];
+    if (!st || !st.loaded) {
+        c.innerHTML = '';
+        document.getElementById('paginationBar').style.display = 'none';
+        return;
+    }
+
+    let schema = schemas[activeTableId];
+    // Force the headers to strictly match the Schema, stripping out any garbage columns from the raw CSV
+    st.headers = [...schema.FIELD_ORDER];
+    let orderedHeaders = st.headers;
+
+    let totalRows = st.rows.length;
+    let totalPages = Math.ceil(totalRows / rowsPerPage);
+    if(currentPage > totalPages) currentPage = totalPages || 1;
+    
+    let startIdx = (currentPage - 1) * rowsPerPage;
+    let endIdx = Math.min(startIdx + rowsPerPage, totalRows);
+    
+    let html = '<div class="table-wrap"><table><thead><tr><th class="row-num">#</th>';
+    orderedHeaders.forEach(h => {
+        let rule = schema.RULES[h];
+        let badge = rule && rule.required ? '<span style="color:#ef4444">*</span>' : (!rule ? '' : '<span style="color:#94a3b8;font-size:10px">opt</span>');
+        html += `<th>${rule?.label || h} ${badge}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+
+    const dateFields = schema.DATE_FIELDS || [];
+
+    for (let rIdx = startIdx; rIdx < endIdx; rIdx++) {
+        let row = st.rows[rIdx];
+        let hasErr = st.cellErrors[rIdx] && Object.keys(st.cellErrors[rIdx]).length > 0;
+        html += `<tr class="${hasErr ? 'has-error' : ''}"><td class="row-num">${rIdx+1}</td>`;
+        orderedHeaders.forEach(key => {
+            let err = st.cellErrors[rIdx]?.[key];
+            let isAuto = st.autocorrectedCells[rIdx] && st.autocorrectedCells[rIdx].has(key);
+            let cls = 'cell-input';
+            if (err) cls += ' cell-err';
+            else if (isAuto && st.hasValidated) cls += ' cell-autocorrected';
+            else if (st.hasValidated) cls += ' cell-ok';
+            let displayVal = row[key] || '';
+            let rule = schema.RULES[key] || {};
+            
+            let cellHtml = '';
+
+            if (rule.allowed && rule.allowed.length > 0) {
+                // ── DROPDOWN SELECT ──
+                let opts = `<option value=""></option>`;
+                rule.allowed.forEach(a => {
+                    opts += `<option value="${a}" ${displayVal === a ? 'selected' : ''}>${a}</option>`;
+                });
+                cellHtml = `<select class="${cls}" data-row="${rIdx}" data-col="${key}">${opts}</select>`;
+            } else if (dateFields.includes(key)) {
+                // ── DATE PICKER ── Convert MM/DD/YYYY to YYYY-MM-DD for the input, display back
+                let dateVal = '';
+                let clean = String(displayVal).replace(/^'+/, '').trim();
+                let dObj = new Date(clean);
+                if (!isNaN(dObj.getTime())) {
+                    let m = String(dObj.getMonth() + 1).padStart(2, '0');
+                    let d = String(dObj.getDate()).padStart(2, '0');
+                    let y = dObj.getFullYear();
+                    dateVal = `${y}-${m}-${d}`;
+                }
+                cellHtml = `<input type="date" class="${cls}" data-row="${rIdx}" data-col="${key}" value="${dateVal}">`;
+            } else {
+                // ── MASKED TEXT INPUT ──
+                let maxLen = rule.max || '';
+                if (key === 'cellphone_no') maxLen = '13';
+                if (key === 'tin_no') maxLen = '17';     // 000-000-000-00000
+                if (key === 'pin_no') maxLen = '17';     // 000-00-000-00-000
+                if (key === 'tdn_no') maxLen = '20';     // alphanumeric, free format
+                if (key === 'bin' || key === 'business_bin') maxLen = '20'; // 7-4-7 + 2 dashes
+                if (rule.numeric && !maxLen) maxLen = '20';
+                let htmlAttr = maxLen ? ` maxlength="${maxLen}"` : '';
+                cellHtml = `<input type="text" class="${cls}" data-row="${rIdx}" data-col="${key}" value="${escapeHtml(displayVal)}"${htmlAttr}>`;
+            }
+            html += `<td title="${escapeHtml(err || '')}">${cellHtml}</td>`;
+        });
+        html += '</tr>';
+    }
+    html += '</tbody></table></div>';
+    c.innerHTML = html;
+    
+    // Pagination UI
+    let pBar = document.getElementById('paginationBar');
+    if (totalRows > rowsPerPage) {
+        pBar.style.display = 'flex';
+        document.getElementById('pageInfo').innerText = `Page ${currentPage} of ${totalPages} (${startIdx+1}-${endIdx} of ${totalRows})`;
+        document.getElementById('prevPage').disabled = currentPage === 1;
+        document.getElementById('nextPage').disabled = currentPage === totalPages;
+    } else {
+        pBar.style.display = 'none';
+    }
+
+    // ── TEXT INPUT EVENTS ──
+    c.querySelectorAll('input.cell-input').forEach(input => {
+        input.addEventListener('input', e => {
+            let r = parseInt(e.target.dataset.row), k = e.target.dataset.col;
+            let rule = schemas[activeTableId].RULES[k] || {};
+            
+            // Real-time Input Masking
+            if (e.target.type !== 'date') {
+                if (rule.numeric) {
+                    e.target.value = e.target.value.replace(/[^\d.\-]/g, '');
+                } else if (k === 'cellphone_no') {
+                    e.target.value = e.target.value.replace(/[^\d']/g, '');
+                } else if (k === 'tin_no') {
+                    e.target.value = applyTINMask(e.target.value);
+                } else if (k === 'pin_no') {
+                    e.target.value = applyPINMask(e.target.value);
+                } else if (k === 'bin' || k === 'business_bin') {
+                    e.target.value = e.target.value.replace(/[^\d\-]/g, '');
+                } else if (k === 'tdn_no') {
+                    e.target.value = e.target.value.replace(/[^\w\-]/g, '').toUpperCase();
+                } else if (k === 'incharge_extension_name') {
+                    e.target.value = e.target.value.replace(/\./g, '');
+                }
+            }
+
+            // Date picker: convert YYYY-MM-DD → 'MM/DD/YYYY
+            if (e.target.type === 'date' && e.target.value) {
+                let [y,m,d] = e.target.value.split('-');
+                st.rows[r][k] = `'${m}/${d}/${y}`;
+            } else {
+                st.rows[r][k] = e.target.value;
+            }
+            if (st.hasValidated) runLiveValidation(r, k, e.target);
+        });
+        input.addEventListener('change', e => {
+            // Also handle date on change
+            if (e.target.type === 'date' && e.target.value) {
+                let r = parseInt(e.target.dataset.row), k = e.target.dataset.col;
+                let [y,m,d] = e.target.value.split('-');
+                st.rows[r][k] = `'${m}/${d}/${y}`;
+            }
+            if (st.hasValidated) runLiveValidation(parseInt(e.target.dataset.row), e.target.dataset.col, e.target);
+        });
+        input.addEventListener('mouseenter', e => showTooltip(e.target));
+        input.addEventListener('mouseleave', hideTooltip);
+    });
+
+    // ── SELECT DROPDOWN EVENTS ──
+    c.querySelectorAll('select.cell-input').forEach(sel => {
+        sel.addEventListener('change', e => {
+            let r = parseInt(e.target.dataset.row), k = e.target.dataset.col;
+            st.rows[r][k] = e.target.value;
+            if (st.hasValidated) runLiveValidation(r, k, e.target);
+        });
+        sel.addEventListener('mouseenter', e => showTooltip(e.target));
+        sel.addEventListener('mouseleave', hideTooltip);
+    });
+}
+
+
+document.getElementById('prevPage').addEventListener('click', () => { if(currentPage > 1) { currentPage--; renderTable(); }});
+document.getElementById('nextPage').addEventListener('click', () => { 
+    let max = Math.ceil(appState[activeTableId].rows.length / rowsPerPage);
+    if(currentPage < max) { currentPage++; renderTable(); }
+});
+
+const tipEl = document.getElementById('customTooltip');
+function showTooltip(input) {
+  let r = input.dataset.row;
+  let k = input.dataset.col;
+  let st = appState[activeTableId];
+  let err = st.cellErrors[r]?.[k];
+  if (!err) return;
+  
+  let hint = schemas[activeTableId].HINTS[k];
+  let html = `<div class="err">⚠️ ${escapeHtml(err)}</div>`;
+  if (hint) {
+    if(hint.rule) html += `<div class="rule">${escapeHtml(hint.rule)}</div>`;
+    if(hint.fix) html += `<div class="hint">Fix: ${escapeHtml(hint.fix)}</div>`;
+  }
+  tipEl.innerHTML = html;
+  tipEl.style.display = 'block';
+  let rect = input.getBoundingClientRect();
+  tipEl.style.left = Math.min(rect.left, window.innerWidth - 300) + 'px';
+  tipEl.style.top = (rect.bottom + 5) + 'px';
+}
+function hideTooltip() { tipEl.style.display = 'none'; }
+
+function parseRobustDate(val) {
+    if (!val) return null;
+    let clean = String(val).replace(/^'+/, '').trim();
+    if (!clean) return null;
+    let dObj = new Date(clean);
+    if (/^\d{4,5}$/.test(clean)) {
+        let serial = parseInt(clean);
+        dObj = new Date(Date.UTC(1899, 11, 30 + serial));
+    } else if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}$/.test(clean)) {
+        let parts = clean.split(/[\/\-]/);
+        let p1 = parseInt(parts[0]), p2 = parseInt(parts[1]), y = parseInt(parts[2]);
+        if (p1 > 12) dObj = new Date(y, p2 - 1, p1);
+        else dObj = new Date(y, p1 - 1, p2);
+    }
+    if (isNaN(dObj.getTime())) return null;
+    let y = dObj.getFullYear();
+    if (y < 1900 || y > 2100) return null;
+    return dObj;
+}
+
+function formatDate(raw) {
+  let dObj = parseRobustDate(raw);
+  if (!dObj) return raw;
+  let formatted = String(dObj.getMonth()+1).padStart(2,'0') + '/' + String(dObj.getDate()).padStart(2,'0') + '/' + dObj.getFullYear();
+  return "'" + formatted;
+}
+
+function normalizeBIN(raw) {
+    if (!raw) return null;
+    let bin = String(raw).trim().replace(/^['"]+/, '').replace(/['"]+$/, '');
+    bin = bin.replace(/[–—−]/g, '-').replace(/\s+/g, '');
+    if (/^\d{7}-\d{4}-\d{7}$/.test(bin)) return bin;
+    return null;
+}
+
+function customValidateRow(tableId, row, errs, seenLists) {
+    const g = (k) => (row[k] == null ? '' : String(row[k])).trim();
+    
+    if (tableId === 'table1') {
+        let bin = g('bin');
+        if (bin) {
+            let normBin = normalizeBIN(bin);
+            if (!normBin) {
+                errs.bin = 'Format: PSGC7-YEAR4-INC7  e.g. 0201514-2025-0000001';
+            } else if (selectedLGU) {
+                let actualPrefix = normBin.substring(0, 7);
+                if (actualPrefix !== selectedLGU.psgcPrefix) {
+                    errs.bin = `PSGC mismatch: expected ${selectedLGU.psgcPrefix} (${selectedLGU.municipality}, ${selectedLGU.provinceLabel}), got ${actualPrefix}`;
+                }
+            }
+        }
+        
+        let cell = g('cellphone_no');
+        if (cell && !/^'?639\d{9}$/.test(cell)) errs.cellphone_no = 'Must be 12 digits starting with 639';
+        
+        let email = g('email_address');
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.email_address = 'Invalid email format';
+
+        let tin = g('tin_no');
+        if (tin && !/^\d{3}-\d{3}-\d{3}-\d{5}$/.test(tin)) errs.tin_no = 'Format: 000-000-000-00000';
+
+        let pin = g('pin_no');
+        if (pin && !/^\d{3}-\d{2}-\d{3}-\d{2}-\d{3}$/.test(pin)) errs.pin_no = 'Format: 000-00-000-00-000';
+
+        let ext = g('incharge_extension_name');
+        if (ext && ext.includes('.')) errs.incharge_extension_name = 'Do not include period (.)';
+
+        let bt = g('business_type');
+        if (bt === 'SOLE PROPRIETORSHIP') {
+            if (!g('dti_no')) errs.dti_no = 'Required for SOLE PROPRIETORSHIP';
+            if (!g('dti_registration_expiry_date')) errs.dti_registration_expiry_date = 'Required for SOLE PROPRIETORSHIP';
+        }
+        if (['ONE PERSON CORPORATION','PARTNERSHIP','CORPORATION'].includes(bt) && !g('sec_no')) errs.sec_no = 'Required for ' + bt;
+        if (bt === 'COOPERATIVE' && !g('cda_no')) errs.cda_no = 'Required for COOPERATIVE';
+        
+        let locOwned = g('location_owned');
+        if (locOwned === '1') {
+            if (!g('tdn_no') && !g('pin_no')) {
+                errs.tdn_no = 'Provide TDN or PIN for owned';
+                errs.pin_no = 'Provide TDN or PIN for owned';
+            }
+        }
+        if (locOwned === '0') {
+            if (!g('lessor_name')) errs.lessor_name = 'Required for rented';
+            if (!g('monthly_rental')) errs.monthly_rental = 'Required for rented';
+        }
+
+        let floorArea = g('floor_area');
+        let areaVal = g('area');
+        if (floorArea !== '' && areaVal !== '' && /^\d+(\.\d+)?$/.test(floorArea) && /^\d+(\.\d+)?$/.test(areaVal)) {
+            if (Number(areaVal) > Number(floorArea)) {
+                errs.area = 'Must not exceed floor_area (' + floorArea + ')';
+            }
+        }
+        
+        let male = Number(g('no_of_male_employees') || 0);
+        let female = Number(g('no_of_female_employees') || 0);
+        let residing = Number(g('no_of_employees_residing_within_the_area') || 0);
+        if (residing > male + female) errs.no_of_employees_residing_within_the_area = 'Cannot exceed total (' + (male+female) + ')';
+    } 
+    else if (tableId === 'table2' || tableId === 'table3' || tableId === 'table4') {
+        let binKey = tableId === 'table2' ? 'bin' : 'business_bin';
+        let bin = g(binKey);
+        if (bin) {
+            let normBin = normalizeBIN(bin);
+            if (!normBin) {
+                errs[binKey] = 'Format: PSGC7-YEAR4-INC7  e.g. 0201514-2025-0000001';
+            } else if (selectedLGU) {
+                let actualPrefix = normBin.substring(0, 7);
+                if (actualPrefix !== selectedLGU.psgcPrefix) {
+                    errs[binKey] = `PSGC mismatch: expected ${selectedLGU.psgcPrefix} (${selectedLGU.municipality})  got ${actualPrefix}`;
+                }
+            }
+        }
+        
+        // CROSS-TABLE REFERENTIAL INTEGRITY
+        if (appState['table1'].loaded && appState['table1'].hasValidated) {
+            let normBin = normalizeBIN(bin);
+            if (normBin && !MasterStore.validBINs.has(normBin)) {
+                errs[binKey] = 'BIN not found in Table 1 MasterStore';
+            }
+        }
+    }
+    
+    if (tableId === 'table3') {
+        let appYear = Number(g('year'));
+        let bin = g('business_bin');
+        let normBin3 = normalizeBIN(bin);
+
+        if (normBin3 && appYear) {
+            let binYear = Number(normBin3.split('-')[1]);
+            if (appYear <= binYear) {
+                errs.year = `Year (${appYear}) must be GREATER than BIN year (${binYear}). e.g. BIN is ${binYear}, so Year must be ${binYear + 1} or later.`;
+            }
+        }
+
+        let qf = g('qtr_from'), qt = g('qtr_to');
+        if (qf && qt && Number(qt) < Number(qf)) errs.qtr_to = 'Must be >= Qtr From';
+        
+        let amtN = Number((g('amount')||'0').replace(/[^\d.\-]/g,''));
+        let surN = Number((g('surcharge')||'0').replace(/[^\d.\-]/g,''));
+        let intN = Number((g('interest')||'0').replace(/[^\d.\-]/g,''));
+        let dscN = Number((g('discount')||'0').replace(/[^\d.\-]/g,''));
+        let expected = amtN + surN + intN - dscN;
+        let totalVal = g('total');
+        if (totalVal !== '' && !isNaN(Number(totalVal.replace(/[^\d.\-]/g,'')))) {
+            if (Math.abs(Number(totalVal.replace(/[^\d.\-]/g,'')) - expected) > 0.01) {
+                errs.total = 'Must equal amount + surcharge + interest - discount (' + expected + ')';
+            }
+        }
+    }
+    else if (tableId === 'table4') {
+        let amtN = Number((g('amount')||'0').replace(/[^\d.\-]/g,''));
+        let surN = Number((g('Surcharge')||'0').replace(/[^\d.\-]/g,''));
+        let intN = Number((g('Interest')||'0').replace(/[^\d.\-]/g,''));
+        let dscN = Number((g('discount')||'0').replace(/[^\d.\-]/g,''));
+        let expected = amtN + surN + intN - dscN;
+        let totalVal = g('total');
+        if (totalVal !== '' && !isNaN(Number(totalVal.replace(/[^\d.\-]/g,'')))) {
+            let expectedRounded = Math.round(expected * 100) / 100;
+            if (Math.abs(Number(totalVal.replace(/[^\d.\-]/g,'')) - expectedRounded) > 0.001) {
+                errs.total = 'Must equal amount + Surcharge + Interest - discount (' + expectedRounded + ')';
+            }
+        }
+        let qf = g('qtr_from'), qt = g('qtr_to');
+        if (qf && qt && Number(qt) < Number(qf)) errs.qtr_to = 'Must be >= Qtr From';
+    }
+}
+
+function validateSingleRow(tableId, row, rowIdx, seenLists) {
+  let errs = {};
+  let schema = schemas[tableId].RULES;
+  
+  Object.keys(schema).forEach(k => {
+    let rule = schema[k];
+    let val = (row[k] == null ? '' : String(row[k])).trim();
+    
+    if (rule.required && val === '') { errs[k] = 'Required'; return; }
+    if (val !== '') {
+      if (rule.min && val.length < rule.min) errs[k] = `Min ${rule.min} chars`;
+      if (rule.max && val.length > rule.max) errs[k] = `Max ${rule.max} chars`;
+      if (rule.allowed && !rule.allowed.includes(val)) errs[k] = `Allowed: ${rule.allowed.join(', ')}`;
+      if (rule.numeric) {
+        if (!/^\d+(\.\d+)?$/.test(val)) {
+            errs[k] = 'Must be numbers only';
+        }
+      }
+      let df = schemas[tableId].DATE_FIELDS || [];
+      if (df.includes(k)) {
+        let dObj = parseRobustDate(val);
+        if (!dObj) {
+            errs[k] = "Invalid Date or Format";
+        } else {
+            let cleanVal = val.replace(/^'+/, '');
+            if (!/^\d{2}\/\d{2}\/\d{4}$/.test(cleanVal)) {
+                errs[k] = "Invalid format. Use MM/DD/YYYY (Click Auto-Correct)";
+            }
+        }
+      }
+    }
+  });
+
+  customValidateRow(tableId, row, errs, seenLists);
+  return errs;
+}
+
+// Deduplication grouping
+function detectDuplicates(tableId, rows) {
+    let dups = [];
+    if (tableId === 'table1') {
+        let map = {};
+        rows.forEach((r, idx) => { let b = r?.bin?.trim(); if(b) { map[b] = map[b] || []; map[b].push(idx); } });
+        for (let b in map) if(map[b].length > 1) dups.push({table: tableId, keyField: 'bin', keyValue: b, indices: map[b]});
+    }
+    if (tableId === 'table3') {
+        // or_no uniqueness
+        let mapOr = {};
+        rows.forEach((r, idx) => { let o = r?.or_no?.trim(); if(o) { mapOr[o] = mapOr[o] || []; mapOr[o].push(idx); } });
+        for (let o in mapOr) if(mapOr[o].length > 1) dups.push({table: tableId, keyField: 'or_no', keyValue: o, indices: mapOr[o]});
+
+        // permit_no uniqueness (skip blank)
+        let mapPm = {};
+        rows.forEach((r, idx) => { let p = r?.permit_no?.trim(); if(p) { mapPm[p] = mapPm[p] || []; mapPm[p].push(idx); } });
+        for (let p in mapPm) if(mapPm[p].length > 1) dups.push({table: tableId, keyField: 'permit_no', keyValue: p, indices: mapPm[p]});
+
+        // barangay_clearance_number uniqueness (skip blank)
+        let mapBc = {};
+        rows.forEach((r, idx) => { let b = r?.barangay_clearance_number?.trim(); if(b) { mapBc[b] = mapBc[b] || []; mapBc[b].push(idx); } });
+        for (let b in mapBc) if(mapBc[b].length > 1) dups.push({table: tableId, keyField: 'barangay_clearance_number', keyValue: b, indices: mapBc[b]});
+    }
+    return dups;
+}
+
+function runLiveValidation(changedRow, changedKey, inputEl) {
+  let st = appState[activeTableId];
+  let seenLists = {};
+  
+  let errs = validateSingleRow(activeTableId, st.rows[changedRow], changedRow, seenLists);
+  if (Object.keys(errs).length > 0) {
+      st.cellErrors[changedRow] = errs;
+      auditLog.push({table: activeTableId, row: changedRow+1, type: 'ERROR', message: `${changedKey}: ${errs[changedKey]}`});
+  } else { 
+      delete st.cellErrors[changedRow]; 
+  }
+  
+  updateStatusUI();
+  
+  let tr = inputEl.closest('tr');
+  let hasRowErr = st.cellErrors[changedRow] !== undefined;
+  tr.className = hasRowErr ? 'has-error' : '';
+  
+  tr.querySelectorAll('.cell-input').forEach(inp => {
+    let k = inp.dataset.col;
+    let err = st.cellErrors[changedRow]?.[k];
+    let isAuto = st.autocorrectedCells[changedRow] && st.autocorrectedCells[changedRow].has(k);
+    inp.className = 'cell-input' + (err ? ' cell-err' : (isAuto ? ' cell-autocorrected' : ' cell-ok'));
+  });
+}
+
+function processDuplicatesModal() {
+    if (pendingDuplicates.length === 0) return;
+    let dup = pendingDuplicates.shift();
+    let st = appState[dup.table];
+    
+    document.getElementById('dupModal').style.display = 'flex';
+    let container = document.getElementById('dupCards');
+    container.innerHTML = '';
+    
+    dup.indices.forEach(rowIdx => {
+        let row = st.rows[rowIdx];
+        if(!row) return; // already deleted
+        let card = document.createElement('div');
+        card.className = 'dup-card';
+        let html = `<div style="font-weight:bold; margin-bottom:10px;">Row ${rowIdx+1} (${dup.keyField}: ${dup.keyValue})</div>`;
+        
+        let schema = schemas[dup.table];
+        schema.FIELD_ORDER.slice(0, 8).forEach(f => {
+            if (row[f]) html += `<div class="dup-field"><strong>${f}</strong><span>${escapeHtml(row[f])}</span></div>`;
+        });
+        
+        html += `<button class="btn btn-primary" style="margin-top:15px;width:100%;justify-content:center;">Keep This Row</button>`;
+        card.innerHTML = html;
+        
+        card.querySelector('button').addEventListener('click', () => {
+            // Delete the other rows
+            dup.indices.forEach(idx => {
+                if (idx !== rowIdx) {
+                    st.rows[idx] = null; // Mark for deletion
+                    auditLog.push({table: dup.table, row: idx+1, type: 'DEDUPLICATION', message: `Discarded duplicate ${dup.keyField} ${dup.keyValue}`});
+                } else {
+                    auditLog.push({table: dup.table, row: idx+1, type: 'DEDUPLICATION', message: `Kept record for ${dup.keyField} ${dup.keyValue}`});
+                }
+            });
+            // Compact rows
+            st.rows = st.rows.filter(r => r !== null);
+            
+            document.getElementById('dupModal').style.display = 'none';
+            
+            if (pendingDuplicates.length > 0) {
+                processDuplicatesModal();
+            } else {
+                // Done deduplicating this table
+                finalizeValidation(dup.table);
+            }
+        });
+        container.appendChild(card);
+    });
+}
+
+document.getElementById('skipDup').addEventListener('click', () => {
+    document.getElementById('dupModal').style.display = 'none';
+    let dup = pendingDuplicates[0];
+    if(dup) auditLog.push({table: dup.table, row: 'System', type: 'DEDUPLICATION', message: `Skipped manual resolution for ${dup.keyField} ${dup.keyValue}`});
+    
+    if (pendingDuplicates.length > 0) {
+        processDuplicatesModal();
+    } else {
+        finalizeValidation(activeTableId);
+    }
+});
+document.getElementById('closeDupModal').addEventListener('click', () => {
+    document.getElementById('dupModal').style.display = 'none';
+    pendingDuplicates = [];
+    finalizeValidation(activeTableId);
+});
+
+document.getElementById('validateBtn').addEventListener('click', () => {
+    Object.keys(appState).forEach(tid => {
+        if(appState[tid].loaded) executeValidation(tid);
+    });
+});
+
+function executeValidation(tableId) {
+    let st = appState[tableId];
+    st.hasValidated = true;
+    st.cellErrors = {};
+    let seenLists = {};
+    
+    let dups = detectDuplicates(tableId, st.rows);
+    if (dups.length > 0) {
+        pendingDuplicates = pendingDuplicates.concat(dups);
+        if (tableId === activeTableId) processDuplicatesModal();
+        return; 
+    }
+    
+    finalizeValidation(tableId);
+}
+
+function finalizeValidation(tableId) {
+    let st = appState[tableId];
+    let seenLists = {};
+    
+    if (tableId === 'table1') MasterStore.validBINs.clear();
+
+    st.rows.forEach((row, idx) => {
+        if(!row) return;
+        let errs = validateSingleRow(tableId, row, idx, seenLists);
+        if (Object.keys(errs).length > 0) {
+            st.cellErrors[idx] = errs;
+        }
+        if (tableId === 'table1') {
+            let bin = normalizeBIN(row['bin']);
+            if (bin) {
+                MasterStore.validBINs.add(bin);
+            }
+        }
+    });
+    
+    if(tableId === activeTableId) {
+        currentPage = 1;
+        renderTable();
+        updateStatusUI();
+        document.getElementById('exportBtn').style.display = 'inline-flex';
+        document.getElementById('exportAuditBtn').style.display = auditLog.length > 0 ? 'inline-flex' : 'none';
+    }
+}
+
+function updateStatusUI() {
+    let st = appState[activeTableId];
+    if(!st.loaded) return;
+    
+    let errCount = Object.keys(st.cellErrors).reduce((acc, idx) => acc + Object.keys(st.cellErrors[idx]).length, 0);
+    
+    const s = document.getElementById('status');
+    const sum = document.getElementById('errorSummary');
+    
+    if (!st.hasValidated) {
+        s.className = 'status-info';
+        s.innerHTML = `Table ${activeTableId} loaded (${st.rows.length} rows). Click Validate.`;
+        sum.style.display = 'none';
+    } else if (errCount === 0) {
+        s.className = 'status-ok';
+        s.innerHTML = `✅ All ${st.rows.length} rows valid in ${activeTableId}. Ready for export.`;
+        sum.style.display = 'none';
+    } else {
+        s.className = 'status-err';
+        s.innerHTML = `❌ Found ${errCount} error(s) across ${Object.keys(st.cellErrors).length} row(s) in ${activeTableId}. Hover over red cells to see fixes.`;
+        sum.style.display = 'block';
+        
+        let html = `<h4><span style="font-size:16px">⚠</span> Error Summary (${errCount})</h4>`;
+        let counter = 0;
+        Object.entries(st.cellErrors).forEach(([r, errs]) => {
+            if (counter > 50) return; 
+            let errStr = Object.entries(errs).map(([k,v]) => `<b>${k}</b>: ${v}`).join(' | ');
+            html += `<div class="err-row">Row ${(Number(r)+1)}: ${errStr}</div>`;
+            counter++;
+        });
+        if(Object.keys(st.cellErrors).length > 50) html += `<div class="err-row">...and more. Check Audit Log.</div>`;
+        sum.innerHTML = html;
+    }
+}
+
+function customAutoCorrect(tableId, row, fixes) {
+    const v = (k) => (row[k] == null ? '' : String(row[k])).trim();
+    if (tableId === 'table1') {
+        let bin = v('bin');
+        if (bin && bin.includes(' ')) { row.bin = bin.replace(/\s+/g, ''); fixes.push('bin: removed spaces'); }
+        
+        let cell = v('cellphone_no');
+        if (cell) {
+            let digits = cell.replace(/[^\d]/g, '');
+            if (digits.startsWith('09') && digits.length === 11) { row.cellphone_no = '639' + digits.substring(2); fixes.push('cellphone_no: converted 09xx to 639xx'); }
+        }
+        
+        let loc = v('location_owned').toLowerCase();
+        if (['yes', 'true', 'owned', '1.0'].includes(loc)) { row.location_owned = '1'; fixes.push('location_owned: converted to 1'); }
+        else if (['no', 'false', 'rented', '0.0'].includes(loc)) { row.location_owned = '0'; fixes.push('location_owned: converted to 0'); }
+        else if (loc !== '1' && loc !== '0' && loc !== '') { row.location_owned = ''; fixes.push('location_owned: cleared invalid'); }
+
+        let ext = v('incharge_extension_name');
+        if (ext && ext.includes('.')) {
+            row.incharge_extension_name = ext.replace(/\./g, '').trim();
+            fixes.push('incharge_extension_name: removed periods');
+        }
+
+        let tin = v('tin_no');
+        if (tin) {
+            let d = tin.replace(/[^\d]/g, '');
+            let formatted = d.substring(0,3) + '-' + d.substring(3,6) + '-' + d.substring(6,9) + '-' + d.substring(9,14);
+            if (d.length === 14 && tin !== formatted) {
+                row.tin_no = formatted;
+                fixes.push('tin_no: auto-formatted to 000-000-000-00000');
+            }
+        }
+
+        let pin = v('pin_no');
+        if (pin) {
+            let d = pin.replace(/[^\d]/g, '');
+            if (d.length === 13 && pin !== (d.substring(0,3)+'-'+d.substring(3,5)+'-'+d.substring(5,8)+'-'+d.substring(8,10)+'-'+d.substring(10,13))) {
+                row.pin_no = d.substring(0,3) + '-' + d.substring(3,5) + '-' + d.substring(5,8) + '-' + d.substring(8,10) + '-' + d.substring(10,13);
+                fixes.push('pin_no: auto-formatted');
+            }
+        }
+
+        ['floor_area','area','monthly_rental','no_of_male_employees','no_of_female_employees','no_of_employees_residing_within_the_area','no_of_van','no_of_truck','no_of_motorcycle'].forEach(f => {
+            let val = v(f);
+            if (val && val.includes('%')) {
+                let parsed = parseFloat(val.replace(/%/g, ''));
+                if (!isNaN(parsed)) {
+                    row[f] = String(parsed / 100);
+                    fixes.push(f + ': removed excel percentage formatting');
+                }
+            }
+        });
+    }
+    if (tableId === 'table3') {
+        let amtN = Number(v('amount').replace(/[^\d.\-]/g,'') || 0);
+        let surN = Number(v('surcharge').replace(/[^\d.\-]/g,'') || 0);
+        let intN = Number(v('interest').replace(/[^\d.\-]/g,'') || 0);
+        let dscN = Number(v('discount').replace(/[^\d.\-]/g,'') || 0);
+        let expectedTotal = amtN + surN + intN - dscN;
+        let currentTotal = v('total').replace(/[^\d.\-]/g,'');
+        if (!isNaN(amtN) && !isNaN(surN) && !isNaN(intN) && !isNaN(dscN)) {
+            if (currentTotal === '' || Number(currentTotal) !== expectedTotal) {
+                row.total = expectedTotal.toString();
+                fixes.push('total: auto-calculated');
+            }
+        }
+    }
+    if (tableId === 'table4') {
+        let amtN = Number(v('amount').replace(/[^\d.\-]/g,'') || 0);
+        let surN = Number(v('Surcharge').replace(/[^\d.\-]/g,'') || 0);
+        let intN = Number(v('Interest').replace(/[^\d.\-]/g,'') || 0);
+        let dscN = Number(v('discount').replace(/[^\d.\-]/g,'') || 0);
+        let expectedTotal = Math.round((amtN + surN + intN - dscN) * 100) / 100;
+        let currentTotal = v('total').replace(/[^\d.\-]/g,'');
+        if (!isNaN(amtN) && !isNaN(surN) && !isNaN(intN) && !isNaN(dscN)) {
+            if (currentTotal === '' || Number(currentTotal) !== expectedTotal) {
+                row.total = String(expectedTotal);
+                fixes.push('total: auto-calculated');
+            }
+        }
+    }
+}
+
+document.getElementById('autocorrectBtn').addEventListener('click', () => {
+    Object.keys(appState).forEach(tid => {
+        let st = appState[tid];
+        if(!st.loaded) return;
+        
+        st.autocorrectedCells = {};
+        let df = schemas[tid] && schemas[tid].DATE_FIELDS ? schemas[tid].DATE_FIELDS : [];
+        
+        st.rows.forEach((row, idx) => {
+            if(!row) return;
+            let fixes = [];
+            
+            Object.keys(row).forEach(k => {
+                let orig = String(row[k]||'').trim();
+                let fixed = orig;
+                if (df.includes(k) && orig) {
+                    fixed = formatDate(orig);
+                }
+                let rule = schemas[tid].RULES[k];
+                if (rule && rule.allowed && orig) {
+                    let upper = orig.toUpperCase().trim();
+                    if (rule.allowed.includes(upper)) fixed = upper;
+                }
+                if (rule && rule.numeric && fixed) {
+                    let nStr = fixed.replace(/[^\d.\-]/g, '');
+                    if (nStr !== fixed && nStr !== '') fixed = nStr;
+                }
+                if (fixed !== orig) {
+                    fixes.push(`${k}: formatted`);
+                    row[k] = fixed;
+                }
+            });
+            
+            customAutoCorrect(tid, row, fixes);
+            
+            if (fixes.length > 0) {
+                st.autocorrectedCells[idx] = new Set(fixes.map(f => f.split(':')[0]));
+                fixes.forEach(f => {
+                    auditLog.push({table: tid, row: idx+1, type: 'AUTOCORRECT', message: f});
+                });
+            }
+        });
+    });
+    
+    document.getElementById('validateBtn').click();
+    alert('Autocorrect complete. Check Audit Log for details.');
+});
+
+document.getElementById('exportBtn').addEventListener('click', () => {
+  let st = appState[activeTableId];
+  
+  let errCount = Object.keys(st.cellErrors).reduce((acc, idx) => acc + Object.keys(st.cellErrors[idx]).length, 0);
+  if (errCount > 0) {
+      if (!confirm(`Warning: You have ${errCount} unresolved error(s) in this table.\n\nAre you sure you want to export and ignore these errors? Click OK to export anyway, or Cancel to continue correcting.`)) {
+          return;
+      }
+  }
+
+  let finalRows = st.rows.map(r => {
+    if(!r) return null;
+    let out = {};
+    st.headers.forEach(h => {
+      let v = String(r[h] || '').trim();
+
+      // Strip leading quote prefix (used internally for Excel display) — export raw value for PHP
+      if (v.startsWith("'")) v = v.substring(1);
+
+      // Date fields: export as plain m/d/Y (e.g. 04/14/2028) — matches PHP DateTime::createFromFormat('m/d/Y')
+      // NOTE: Do NOT re-wrap with ="..." — that breaks PHP's CSV date parser.
+      // Excel may reformat dates on open, but the raw CSV file on disk is always correct for PHP import.
+
+      out[h] = v;
+    });
+    return out;
+  }).filter(r => r !== null);
+  
+  let csv = Papa.unparse(finalRows, { columns: st.headers });
+  let blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  let link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = 'validated_' + activeTableId + '_' + Date.now() + '.csv';
+  link.click();
+});
+
+document.getElementById('exportAuditBtn').addEventListener('click', () => {
+    let csv = Papa.unparse(auditLog, { columns: ['table', 'row', 'type', 'message'] });
+    let blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    let link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'bpls_audit_log_' + Date.now() + '.csv';
+    link.click();
+});
+
+// Rules Editor Logic
+const modal = document.getElementById('rulesModal');
+const rulesSelect = document.getElementById('rulesTableSelect');
+const rulesEditor = document.getElementById('rulesEditor');
+
+document.getElementById('rulesBtn').addEventListener('click', () => {
+  rulesSelect.value = activeTableId || 'table1';
+  loadEditorRules();
+  modal.style.display = 'flex';
+});
+
+document.getElementById('closeModal').addEventListener('click', () => modal.style.display='none');
+
+rulesSelect.addEventListener('change', loadEditorRules);
+
+function loadEditorRules() {
+  let val = rulesSelect.value;
+  rulesEditor.value = JSON.stringify(schemas[val].RULES, null, 2);
+}
+
+document.getElementById('saveRules').addEventListener('click', () => {
+  try {
+    let newRules = JSON.parse(rulesEditor.value);
+    schemas[rulesSelect.value].RULES = newRules;
+    localStorage.setItem('bpls_rules_' + rulesSelect.value, JSON.stringify(newRules));
+    alert('✅ Rules saved successfully for ' + rulesSelect.value + '!');
+    document.getElementById('validateBtn').click();
+  } catch(e) {
+    alert('❌ Invalid JSON syntax. Please check your formatting.');
+  }
+});
+
+document.getElementById('resetRules').addEventListener('click', () => {
+  if(confirm('Reset ' + rulesSelect.value + ' validation rules to system defaults?')) {
+    localStorage.removeItem('bpls_rules_' + rulesSelect.value);
+    alert('To fully apply defaults, please reload the page.');
+    location.reload();
+  }
+});
+
+</script>
+</body>
+</html>
