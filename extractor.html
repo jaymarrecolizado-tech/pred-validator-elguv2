@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BPLS V1 → V2 Extractor</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<style>
+:root {
+  --bg:#f8fafc; --text:#0f172a; --panel:#fff; --border:#e2e8f0;
+  --btn:#2563eb; --ok:#047857; --warn:#b45309; --err:#b91c1c;
+}
+[data-theme="dark"] {
+  --bg:#0f172a; --text:#e2e8f0; --panel:#1e293b; --border:#334155;
+  --btn:#3b82f6; --ok:#34d399; --warn:#fbbf24; --err:#f87171;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Segoe UI,system-ui,sans-serif;background:var(--bg);color:var(--text)}
+.header{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border);background:var(--panel)}
+.header h2{margin:0;font-size:1.25rem}
+.header a{color:var(--btn);text-decoration:none;font-weight:600;font-size:14px}
+.wrap{max-width:960px;margin:0 auto;padding:20px}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:16px}
+.card h3{margin:0 0 12px;font-size:15px}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:10px}
+label{font-weight:600;font-size:13px}
+select,input[type=file]{font-size:13px}
+select{padding:7px 10px;border-radius:7px;border:1px solid var(--border);background:var(--bg);color:var(--text);min-width:200px}
+.btn{border:none;border-radius:8px;padding:9px 14px;font-weight:700;cursor:pointer;background:var(--btn);color:#fff;font-size:13px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--text)}
+.btn-ok{background:var(--ok)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.stat{border:1px solid var(--border);border-radius:10px;padding:12px;background:var(--bg)}
+.stat b{display:block;font-size:1.4rem}
+.stat span{font-size:12px;opacity:.8}
+#status{margin-top:10px;font-size:13px;line-height:1.5}
+.tip{font-size:12px;opacity:.8;margin-top:6px}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;background:#dbeafe;color:#1d4ed8}
+</style>
+</head>
+<body>
+<div class="header">
+  <h2>BPLS V1 → V2 Extractor <span class="badge">Companion</span></h2>
+  <div style="display:flex;gap:12px;align-items:center">
+    <a href="index.html">Open Validator →</a>
+    <button class="btn btn-outline" id="themeBtn" type="button">Dark</button>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="card">
+    <h3>1. Select LGU (Province → Municipality)</h3>
+    <div class="row">
+      <label for="provinceSelect">Province</label>
+      <select id="provinceSelect"><option value="">-- Select --</option></select>
+      <label for="municipalitySelect">Municipality / City</label>
+      <select id="municipalitySelect" disabled><option value="">-- Select --</option></select>
+      <span id="psgcBadge" class="badge" style="display:none"></span>
+    </div>
+    <p class="tip">Sets V2 BIN PSGC prefix and scopes barangay name → <code>office_barangay_code</code> matching.</p>
+  </div>
+
+  <div class="card">
+    <h3>2. Upload V1 files</h3>
+    <div class="row">
+      <label>Business Masterlist (required)</label>
+      <input type="file" id="masterFile" accept=".xls,.xlsx">
+    </div>
+    <div class="row">
+      <label>Abstract Of General Collection (optional)</label>
+      <input type="file" id="abstractFile" accept=".xls,.xlsx">
+    </div>
+    <div class="row">
+      <label>Barangay CSV override (optional)</label>
+      <input type="file" id="brgyFile" accept=".csv">
+    </div>
+    <div class="row">
+      <label>Business Natures override (optional)</label>
+      <input type="file" id="naturesFile" accept=".xls,.xlsx,.csv">
+    </div>
+    <p class="tip">Barangay CSV headers: <code>barangay_name,psgc_code</code>. Embedded Region 2 seed currently includes Tuao; upload CSV for other LGUs or to correct codes.</p>
+  </div>
+
+  <div class="card">
+    <h3>3. Extract &amp; export</h3>
+    <div class="row">
+      <button class="btn" id="extractBtn" type="button" disabled>Run Extract</button>
+      <button class="btn btn-ok" id="exportBtn" type="button" disabled>Download 4 CSVs + Report</button>
+    </div>
+    <div class="stats" id="stats" style="display:none;margin-top:12px">
+      <div class="stat"><b id="stBiz">0</b><span>Business</span></div>
+      <div class="stat"><b id="stAct">0</b><span>Activity</span></div>
+      <div class="stat"><b id="stApp">0</b><span>Application</span></div>
+      <div class="stat"><b id="stFee">0</b><span>Fee</span></div>
+      <div class="stat"><b id="stGap">0</b><span>Gap notes</span></div>
+    </div>
+    <div id="status"></div>
+  </div>
+</div>
+
+<script src="data/region2-lgus.js"></script>
+<script src="data/business-natures.js"></script>
+<script src="data/barangays-region2.js"></script>
+<script src="extractor.js"></script>
+<script>
+buildNatureIndex(typeof BUSINESS_NATURES !== 'undefined' ? BUSINESS_NATURES : []);
+
+const provSel = document.getElementById('provinceSelect');
+const muniSel = document.getElementById('municipalitySelect');
+const psgcBadge = document.getElementById('psgcBadge');
+const statusEl = document.getElementById('status');
+
+Object.keys(REGION2_LGUS).forEach(k => {
+  const opt = document.createElement('option');
+  opt.value = k;
+  opt.textContent = REGION2_LGUS[k].label;
+  provSel.appendChild(opt);
+});
+
+provSel.addEventListener('change', () => {
+  muniSel.innerHTML = '<option value="">-- Select --</option>';
+  muniSel.disabled = !provSel.value;
+  selectedLGU = null;
+  psgcBadge.style.display = 'none';
+  syncButtons();
+  if (!provSel.value) return;
+  REGION2_LGUS[provSel.value].municipalities.forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m.code;
+    opt.textContent = m.name;
+    muniSel.appendChild(opt);
+  });
+});
+
+muniSel.addEventListener('change', () => {
+  selectedLGU = null;
+  psgcBadge.style.display = 'none';
+  if (!muniSel.value || !provSel.value) { syncButtons(); return; }
+  const mun = REGION2_LGUS[provSel.value].municipalities.find(m => m.code === muniSel.value);
+  selectedLGU = {
+    province: provSel.value,
+    provinceLabel: REGION2_LGUS[provSel.value].label,
+    municipality: mun.name,
+    muniCode: mun.code,
+    psgcPrefix: mun.psgc7
+  };
+  psgcBadge.style.display = 'inline-block';
+  psgcBadge.textContent = 'PSGC ' + mun.psgc7;
+  syncButtons();
+});
+
+function syncButtons() {
+  const ready = !!(selectedLGU && masterRows.length);
+  document.getElementById('extractBtn').disabled = !ready;
+}
+
+function readWorkbook(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        resolve(XLSX.read(data, { type: 'array', cellDates: true }));
+      } catch (err) { reject(err); }
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+document.getElementById('masterFile').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  statusEl.textContent = 'Reading masterlist…';
+  try {
+    const wb = await readWorkbook(file);
+    const sheetName = wb.SheetNames.find(n => /summary/i.test(n)) || wb.SheetNames[0];
+    masterRows = sheetToObjects(wb, sheetName);
+    statusEl.textContent = 'Masterlist loaded: ' + masterRows.length + ' rows (' + sheetName + ').';
+  } catch (err) {
+    statusEl.textContent = 'Failed to read masterlist: ' + err.message;
+    masterRows = [];
+  }
+  syncButtons();
+});
+
+document.getElementById('abstractFile').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) { abstractRows = []; return; }
+  statusEl.textContent = 'Reading abstract…';
+  try {
+    const wb = await readWorkbook(file);
+    abstractRows = abstractToObjects(wb);
+    statusEl.textContent = 'Abstract loaded: ' + abstractRows.length + ' collection rows.';
+  } catch (err) {
+    statusEl.textContent = 'Failed to read abstract: ' + err.message;
+    abstractRows = [];
+  }
+});
+
+document.getElementById('brgyFile').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const text = await file.text();
+  const lines = text.split(/\r?\n/).filter(Boolean);
+  barangayOverride = new Map();
+  lines.slice(1).forEach(line => {
+    const [name, code] = line.split(',').map(s => s.replace(/^"|"$/g, '').trim());
+    if (name && code) barangayOverride.set(normKey(name), code);
+  });
+  statusEl.textContent = 'Barangay override loaded: ' + barangayOverride.size + ' names.';
+});
+
+document.getElementById('naturesFile').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (/\.csv$/i.test(file.name)) {
+    const text = await file.text();
+    const lines = text.split(/\r?\n/).filter(Boolean);
+    const list = lines.slice(1).map(line => {
+      const parts = line.split(',').map(s => s.replace(/^"|"$/g, '').trim());
+      return { lineCode: parts[0] || parts[2], businessLine: parts[1] || parts[4] || parts[0], isActive: true };
+    });
+    buildNatureIndex(list);
+  } else {
+    const wb = await readWorkbook(file);
+    const rows = sheetToObjects(wb);
+    const list = rows.map(r => ({
+      lineCode: getCell(r, 'LINE CODE', 'line_code', 'business_line_code'),
+      businessLine: getCell(r, 'BUSINESS LINE', 'business_line', 'Nature of Business'),
+      isActive: /yes/i.test(getCell(r, 'Is Active', 'is_active') || 'Yes')
+    })).filter(x => x.lineCode && x.businessLine);
+    buildNatureIndex(list);
+  }
+  statusEl.textContent = 'Business natures override loaded (' + natureIndex.size + ' keys).';
+});
+
+document.getElementById('extractBtn').addEventListener('click', () => {
+  try {
+    const result = buildExport();
+    document.getElementById('stats').style.display = 'grid';
+    document.getElementById('stBiz').textContent = result.businessCsv.length;
+    document.getElementById('stAct').textContent = result.activityCsv.length;
+    document.getElementById('stApp').textContent = result.applicationCsv.length;
+    document.getElementById('stFee').textContent = result.feeCsv.length;
+    document.getElementById('stGap').textContent = result.gaps.length;
+    document.getElementById('exportBtn').disabled = false;
+    statusEl.innerHTML = 'Extract complete. Review gap count, then download. Feed CSVs into <a href="index.html">Validator</a>.';
+  } catch (err) {
+    statusEl.textContent = err.message;
+  }
+});
+
+document.getElementById('exportBtn').addEventListener('click', () => {
+  if (!lastExport) return;
+  const bizH = Object.keys(lastExport.businessCsv[0] || {});
+  const actH = ['bin','business_line_code','capital_amount','gross_amount','gross_amount_essential','gross_amount_nonessential','retired_date'];
+  const appH = ['business_bin','application_type','application_date','year','qtr_from','qtr_to','amount','discount','surcharge','interest','total','issued_date','valid_until','or_no','or_date','permit_no','barangay_clearance_number','business_plate_number','mode_of_payment'];
+  const feeH = ['business_bin','application_or_no','code','description','amount','discount','Interest','Surcharge','total','type','qtr_from','qtr_to','year'];
+  downloadText('Business.csv', toCsv(lastExport.businessCsv, bizH));
+  downloadText('Business_Activity.csv', toCsv(lastExport.activityCsv, actH));
+  downloadText('Application.csv', toCsv(lastExport.applicationCsv, appH));
+  downloadText('Application_Fee.csv', toCsv(lastExport.feeCsv, feeH));
+  downloadText('gap_and_bin_mapping.csv', toCsv(
+    lastExport.binMap.map(b => ({ ...b, kind: 'bin_map' })).concat(
+      lastExport.gaps.map(g => ({ v1_bin: '', v2_bin: '', business_name: g.table, owner: g.field, note: g.issue + ' | value=' + g.value + ' | row=' + g.row, kind: 'gap' }))
+    ),
+    ['kind','v1_bin','v2_bin','business_name','owner','note']
+  ));
+  statusEl.textContent = 'Downloads started (5 files).';
+});
+
+let dark = false;
+document.getElementById('themeBtn').addEventListener('click', () => {
+  dark = !dark;
+  document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  document.getElementById('themeBtn').textContent = dark ? 'Light' : 'Dark';
+});
+</script>
+</body>
+</html>
