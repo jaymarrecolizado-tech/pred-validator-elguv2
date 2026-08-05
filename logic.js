@@ -973,6 +973,8 @@ function showTooltip(input) {
       html += `<div class="desc-label">Business Line</div>`;
       html += `<div class="desc">${escapeHtml(hit.description)}</div>`;
       if (hit.nature) html += `<div class="rule">${escapeHtml(hit.nature)}</div>`;
+      let statusStr = hit.isActive ? '🟢 Active' : '🔴 Inactive (Deprecated in Reference)';
+      html += `<div class="rule" style="margin-top:4px;">Status in Reference: ${statusStr}</div>`;
     }
   }
 
@@ -1065,6 +1067,16 @@ function customValidateRow(tableId, row, errs, seenLists) {
         let ext = g('incharge_extension_name');
         if (ext && ext.includes('.')) errs.incharge_extension_name = 'Do not include period (.)';
 
+        let brgyCode = g('office_barangay_code');
+        if (brgyCode && !/^\d{9,10}$/.test(brgyCode)) errs.office_barangay_code = 'Must be 9-10 digits PSGC Barangay Code';
+
+        ['no_of_male_employees','no_of_female_employees','no_of_employees_residing_within_the_area','no_of_van','no_of_truck','no_of_motorcycle'].forEach(f => {
+            let val = g(f);
+            if (val !== '' && (!/^\d+$/.test(val) || Number(val) < 0)) {
+                errs[f] = 'Must be a non-negative whole integer (0 or greater)';
+            }
+        });
+
         let bt = g('business_type');
         if (bt === 'SOLE PROPRIETORSHIP') {
             if (!g('dti_no')) errs.dti_no = 'Required for SOLE PROPRIETORSHIP';
@@ -1123,7 +1135,7 @@ function customValidateRow(tableId, row, errs, seenLists) {
     }
 
     // Table 2: gross_amount = essential + nonessential (guidelines when 50% essential is used)
-    // + business_line_code must exist in Business Natures reference
+    // + business_line_code must exist in Business Natures reference & be active
     if (tableId === 'table2') {
         let gross = g('gross_amount');
         let ess = g('gross_amount_essential');
@@ -1142,8 +1154,11 @@ function customValidateRow(tableId, row, errs, seenLists) {
 
         let lineCode = g('business_line_code');
         if (lineCode) {
-            if (!lookupBusinessLine(lineCode)) {
+            let hit = lookupBusinessLine(lineCode);
+            if (!hit) {
                 errs.business_line_code = 'Code not found in Business Natures reference';
+            } else if (hit.isActive === false) {
+                errs.business_line_code = 'Code exists in Business Natures reference but is marked INACTIVE';
             }
         }
     }
@@ -1155,6 +1170,10 @@ function customValidateRow(tableId, row, errs, seenLists) {
             if (orNo && !MasterStore.validORs.has(orNo)) {
                 errs.application_or_no = 'OR not found in Application sheet';
             }
+        }
+        let feeYear = Number(g('year'));
+        if (feeYear && feeYear < 2026) {
+            errs.year = 'Per guidelines: Application fees sheet is for 2026+ transactions only (not for 2025 or earlier)';
         }
     }
     
@@ -1517,6 +1536,19 @@ function customAutoCorrect(tableId, row, fixes) {
         else if (['no', 'false', 'rented', '0.0'].includes(loc)) { row.location_owned = '0'; fixes.push('location_owned: converted to 0'); }
         else if (loc !== '1' && loc !== '0' && loc !== '') { row.location_owned = ''; fixes.push('location_owned: cleared invalid'); }
 
+        let act = v('activity_type').toLowerCase();
+        if (act === 'main' || act === 'main office') { row.activity_type = 'Main Office'; fixes.push('activity_type: normalized to Main Office'); }
+        else if (act === 'branch' || act === 'branch office') { row.activity_type = 'Branch Office'; fixes.push('activity_type: normalized to Branch Office'); }
+        else if (act.includes('admin')) { row.activity_type = 'Admin Office Only'; fixes.push('activity_type: normalized to Admin Office Only'); }
+        else if (act === 'warehouse') { row.activity_type = 'Warehouse'; fixes.push('activity_type: normalized to Warehouse'); }
+        else if (act === 'others' || act === 'other') { row.activity_type = 'Others'; fixes.push('activity_type: normalized to Others'); }
+
+        let cit = v('incharge_country_of_citizenship').toLowerCase();
+        if (['ph', 'filipino', 'philippines', 'phil', 'philippine'].includes(cit)) {
+            row.incharge_country_of_citizenship = 'Philippines';
+            fixes.push('incharge_country_of_citizenship: normalized to Philippines');
+        }
+
         let ext = v('incharge_extension_name');
         if (ext && ext.includes('.')) {
             row.incharge_extension_name = ext.replace(/\./g, '').trim();
@@ -1552,6 +1584,14 @@ function customAutoCorrect(tableId, row, fixes) {
                 }
             }
         });
+    }
+    if (tableId === 'table2') {
+        let lineCode = v('business_line_code');
+        if (lineCode && /^\d+$/.test(lineCode) && lineCode.length < 5) {
+            let padded = lineCode.padStart(5, '0');
+            row.business_line_code = padded;
+            fixes.push('business_line_code: padded to 5 digits (' + padded + ')');
+        }
     }
     if (tableId === 'table3') {
         let appType = v('application_type').toUpperCase();
