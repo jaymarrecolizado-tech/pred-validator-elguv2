@@ -1,5 +1,67 @@
 // --- STATE MANAGEMENT ---
 let MasterStore = { validBINs: new Set(), validORs: new Set() };
+
+// Business Natures reference (from Business Natures.xlsx → data/business-natures.js)
+const BusinessLineStore = { byCode: new Map(), list: [] };
+function buildBusinessLineIndex(list) {
+  BusinessLineStore.byCode = new Map();
+  (list || []).forEach(item => {
+    if (!item || item.lineCode == null || item.lineCode === '') return;
+    let code = String(item.lineCode).trim();
+    let prev = BusinessLineStore.byCode.get(code);
+    if (!prev || (item.isActive && !prev.isActive)) {
+      BusinessLineStore.byCode.set(code, {
+        description: item.businessLine || '',
+        nature: item.businessNature || '',
+        isActive: !!item.isActive
+      });
+    }
+  });
+  BusinessLineStore.list = [];
+  BusinessLineStore.byCode.forEach((v, code) => {
+    BusinessLineStore.list.push({
+      code,
+      description: v.description,
+      nature: v.nature,
+      isActive: v.isActive
+    });
+  });
+  BusinessLineStore.list.sort((a, b) => a.code.localeCompare(b.code));
+}
+function normalizeLineCode(raw) {
+  let s = String(raw == null ? '' : raw).trim().replace(/^['"]+|['"]+$/g, '');
+  if (!s) return '';
+  if (/^\d+$/.test(s) && s.length < 5) s = s.padStart(5, '0');
+  return s;
+}
+function lookupBusinessLine(raw) {
+  let code = normalizeLineCode(raw);
+  if (!code) return null;
+  return BusinessLineStore.byCode.get(code) || null;
+}
+function searchBusinessLines(query, limit) {
+  let q = String(query || '').trim().toLowerCase();
+  if (!q) return [];
+  let max = limit || 20;
+  let codeQ = /^\d+$/.test(q) ? (q.length < 5 ? q.padStart(5, '0') : q) : q;
+  let scored = [];
+  for (let i = 0; i < BusinessLineStore.list.length; i++) {
+    let item = BusinessLineStore.list[i];
+    let code = item.code.toLowerCase();
+    let desc = (item.description || '').toLowerCase();
+    let score = 0;
+    if (code === codeQ || code === q) score = 100;
+    else if (code.startsWith(q) || code.startsWith(codeQ)) score = 80;
+    else if (code.includes(q) || code.includes(codeQ)) score = 60;
+    else if (desc.includes(q)) score = 40;
+    else continue;
+    scored.push({ item, score });
+  }
+  scored.sort((a, b) => b.score - a.score || a.item.code.localeCompare(b.item.code));
+  return scored.slice(0, max).map(s => s.item);
+}
+buildBusinessLineIndex(typeof BUSINESS_NATURES !== 'undefined' ? BUSINESS_NATURES : []);
+
 let auditLog = []; // { table, row, type, message }
 
 let appState = {
@@ -795,7 +857,14 @@ function renderTable() {
                 let htmlAttr = maxLen ? ` maxlength="${maxLen}"` : '';
                 cellHtml = `<input type="text" class="${cls}" data-row="${rIdx}" data-col="${key}" value="${escapeHtml(displayVal)}"${htmlAttr}>`;
             }
-            html += `<td title="${escapeHtml(err || '')}">${cellHtml}</td>`;
+            let cellTitle = err || '';
+            if (key === 'business_line_code') {
+                let hit = lookupBusinessLine(displayVal);
+                if (hit && hit.description) {
+                    cellTitle = (cellTitle ? cellTitle + '\n\n' : '') + hit.description;
+                }
+            }
+            html += `<td title="${escapeHtml(cellTitle)}">${cellHtml}</td>`;
         });
         html += '</tr>';
     }
@@ -885,14 +954,29 @@ function showTooltip(input) {
   let k = input.dataset.col;
   let st = appState[activeTableId];
   let err = st.cellErrors[r]?.[k];
-  if (!err) return;
-  
-  let hint = schemas[activeTableId].HINTS[k];
-  let html = `<div class="err">⚠️ ${escapeHtml(err)}</div>`;
-  if (hint) {
-    if(hint.rule) html += `<div class="rule">${escapeHtml(hint.rule)}</div>`;
-    if(hint.fix) html += `<div class="hint">Fix: ${escapeHtml(hint.fix)}</div>`;
+  let html = '';
+
+  if (err) {
+    html += `<div class="err">⚠️ ${escapeHtml(err)}</div>`;
+    let hint = schemas[activeTableId].HINTS[k];
+    if (hint) {
+      if (hint.rule) html += `<div class="rule">${escapeHtml(hint.rule)}</div>`;
+      if (hint.fix) html += `<div class="hint">Fix: ${escapeHtml(hint.fix)}</div>`;
+    }
   }
+
+  // Table 2: show matched Business Natures description on hover
+  if (k === 'business_line_code') {
+    let val = st.rows[r]?.[k];
+    let hit = lookupBusinessLine(val);
+    if (hit && hit.description) {
+      html += `<div class="desc-label">Business Line</div>`;
+      html += `<div class="desc">${escapeHtml(hit.description)}</div>`;
+      if (hit.nature) html += `<div class="rule">${escapeHtml(hit.nature)}</div>`;
+    }
+  }
+
+  if (!html) return;
   tipEl.innerHTML = html;
   tipEl.style.display = 'block';
   let rect = input.getBoundingClientRect();
@@ -1034,6 +1118,32 @@ function customValidateRow(tableId, row, errs, seenLists) {
             let normBin = normalizeBIN(bin);
             if (normBin && !MasterStore.validBINs.has(normBin)) {
                 errs[binKey] = 'BIN not found in Business sheet';
+            }
+        }
+    }
+
+    // Table 2: gross_amount = essential + nonessential (guidelines when 50% essential is used)
+    // + business_line_code must exist in Business Natures reference
+    if (tableId === 'table2') {
+        let gross = g('gross_amount');
+        let ess = g('gross_amount_essential');
+        let non = g('gross_amount_nonessential');
+        if (gross !== '' && ess !== '' && non !== '') {
+            let gN = Number(String(gross).replace(/[^\d.\-]/g, ''));
+            let eN = Number(String(ess).replace(/[^\d.\-]/g, ''));
+            let nN = Number(String(non).replace(/[^\d.\-]/g, ''));
+            if (!isNaN(gN) && !isNaN(eN) && !isNaN(nN)) {
+                let expected = eN + nN;
+                if (Math.abs(gN - expected) > 0.01) {
+                    errs.gross_amount = 'Must equal Gross Essential + Gross Non-Essential (' + expected + ')';
+                }
+            }
+        }
+
+        let lineCode = g('business_line_code');
+        if (lineCode) {
+            if (!lookupBusinessLine(lineCode)) {
+                errs.business_line_code = 'Code not found in Business Natures reference';
             }
         }
     }
