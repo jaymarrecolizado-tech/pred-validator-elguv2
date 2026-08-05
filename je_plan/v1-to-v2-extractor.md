@@ -86,7 +86,8 @@ Same identity across years/ORs → one Business + many Application/Fee rows.
 - Field is on **Business (Table 1):** `office_barangay_code` (not Activity).
 - UI: user selects **Province → Municipality** first.
 - That sets BIN PSGC7 prefix and scopes barangay name matching.
-- **Option C:** embed Region 2 barangay PSGC JSON + allow CSV (`barangay_name,psgc_code`) override/add.
+- **Option C:** embed **all Region 2** barangay PSGC codes (`data/barangays-region2.js` — 93 LGUs, ~2600 name keys from PSA/psgc2) + allow CSV (`barangay_name,psgc_code`) override/add.
+- Codes stored as 10-digit (e.g. Tuao Fugu `0201528015`).
 - Unmatched barangays → gap report.
 
 ### 4. Application Fee from Abstract (confirmed)
