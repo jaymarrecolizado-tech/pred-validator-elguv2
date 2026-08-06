@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en" data-theme="light">
 <head>
 <meta charset="UTF-8">
@@ -461,7 +461,7 @@ const schemas = {
   business_bin: { rule: 'BIN Format: PSGC7-YEAR4-INC7 — must exist in Business sheet when Business is loaded', fix: 'Must match a BIN in the Business sheet when that sheet is loaded and validated. Example: 1400101-2024-0000001' },
   application_type: { rule: 'Must be N, R, or Q', fix: 'Enter N for NEW, R for RENEWAL, or Q for QUARTERLY. Spaces are auto-stripped, case auto-uppercased.' },
   application_date: { rule: 'Required, format MM/DD/YYYY', fix: 'Enter date as MM/DD/YYYY. Example: 01/20/2024. Various date formats are auto-converted.' },
-  year: { rule: 'Required — must be GREATER than the BIN year (PSGC-YEAR-INC)', fix: 'Enter the application year (e.g. 2026). IMPORTANT: this year must be GREATER than the year in the BIN. Example: if BIN is 0201514-2025-0000001 then year must be 2026 or later. The main system enforces: year > BIN year.' },
+  year: { rule: 'Required — for NEW (N): year >= BIN year; for RENEWAL/QUARTERLY: year must be GREATER than BIN year', fix: 'Enter the application year (e.g. 2025). For NEW applications, year may equal the BIN year. For RENEWAL/QUARTERLY, year must be greater than the BIN year.' },
   qtr_from: { rule: 'Optional, must be 1, 2, 3, or 4', fix: 'Enter a quarter number (1-4). Leave blank if not applicable.' },
   qtr_to: { rule: 'Optional, must be 1-4 and >= Qtr From', fix: 'Enter a quarter number (1-4). Must be greater than or equal to Qtr From if both are provided.' },
   amount: { rule: 'Required, non-negative number (decimals allowed)', fix: 'Enter the base amount as a number. Non-numeric characters are auto-stripped.' },
@@ -1788,8 +1788,12 @@ function customValidateRow(tableId, row, errs, seenLists) {
 
         if (normBin3 && appYear) {
             let binYear = Number(normBin3.split('-')[1]);
-            if (appYear <= binYear) {
-                errs.year = `Year (${appYear}) must be GREATER than BIN year (${binYear}). e.g. BIN is ${binYear}, so Year must be ${binYear + 1} or later.`;
+            let appType = g('application_type').toUpperCase();
+            let isNew = (appType === 'N' || appType === 'NEW');
+            if (isNew && appYear < binYear) {
+                errs.year = `Year (${appYear}) must be >= BIN year (${binYear}) for NEW applications.`;
+            } else if (!isNew && appYear <= binYear) {
+                errs.year = `Year (${appYear}) must be GREATER than BIN year (${binYear}) for RENEWAL/QUARTERLY. e.g. Year must be ${binYear + 1} or later.`;
             }
         }
 

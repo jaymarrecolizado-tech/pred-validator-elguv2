@@ -1184,8 +1184,12 @@ function customValidateRow(tableId, row, errs, seenLists) {
 
         if (normBin3 && appYear) {
             let binYear = Number(normBin3.split('-')[1]);
-            if (appYear <= binYear) {
-                errs.year = `Year (${appYear}) must be GREATER than BIN year (${binYear}). e.g. BIN is ${binYear}, so Year must be ${binYear + 1} or later.`;
+            let appType = g('application_type').toUpperCase();
+            let isNew = (appType === 'N' || appType === 'NEW');
+            if (isNew && appYear < binYear) {
+                errs.year = `Year (${appYear}) must be >= BIN year (${binYear}) for NEW applications.`;
+            } else if (!isNew && appYear <= binYear) {
+                errs.year = `Year (${appYear}) must be GREATER than BIN year (${binYear}) for RENEWAL/QUARTERLY. e.g. Year must be ${binYear + 1} or later.`;
             }
         }
 
