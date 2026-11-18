@@ -1,5 +1,5 @@
 // --- STATE MANAGEMENT ---
-let MasterStore = { validBINs: new Set(), validORs: new Set() };
+let MasterStore = { validBINs: new Set(), validORs: new Set(), validApps: new Map() };
 
 // Business Natures reference (from Business Natures.xlsx → data/business-natures.js)
 const BusinessLineStore = { byCode: new Map(), list: [] };
@@ -68,7 +68,8 @@ let appState = {
     table1: { loaded: false, headers: [], rows: [], cellErrors: {}, autocorrectedCells: {}, hasValidated: false },
     table2: { loaded: false, headers: [], rows: [], cellErrors: {}, autocorrectedCells: {}, hasValidated: false },
     table3: { loaded: false, headers: [], rows: [], cellErrors: {}, autocorrectedCells: {}, hasValidated: false },
-    table4: { loaded: false, headers: [], rows: [], cellErrors: {}, autocorrectedCells: {}, hasValidated: false }
+    table4: { loaded: false, headers: [], rows: [], cellErrors: {}, autocorrectedCells: {}, hasValidated: false },
+    table5: { loaded: false, headers: [], rows: [], cellErrors: {}, autocorrectedCells: {}, hasValidated: false }
 };
 
 let activeTableId = 'table1';
@@ -696,11 +697,15 @@ document.getElementById('csvFile').addEventListener('change', (e) => {
                     'dti_registratrion_expiry_date': 'dti_registration_expiry_date',
                     'dti_registration_expiry': 'dti_registration_expiry_date',
                     'dti_expiry_date': 'dti_registration_expiry_date',
-                    'dti_expiry': 'dti_registration_expiry_date'
+                    'dti_expiry': 'dti_registration_expiry_date',
+                    'interest': 'interest',
+                    'surcharge': 'surcharge'
                 };
                 let headerMap = {};
                 headers.forEach(h => {
-                    let normalized = HEADER_ALIASES[h.trim().toLowerCase()] || h.trim();
+                    let raw = h.trim();
+                    let lower = raw.toLowerCase();
+                    let normalized = HEADER_ALIASES[lower] || raw;
                     headerMap[h] = normalized;
                 });
                 let normalizedHeaders = headers.map(h => headerMap[h]);
@@ -711,12 +716,14 @@ document.getElementById('csvFile').addEventListener('change', (e) => {
                     Object.keys(row).forEach(k => {
                         newRow[headerMap[k] || k] = row[k];
                     });
+                    if (detectedId === 'table4') foldFeeAmountKeys(newRow);
                     return newRow;
                 });
                 
                 appState[detectedId] = {
                     loaded: true,
                     headers: normalizedHeaders,
+                    extraHeaders: collectExtraHeaders(detectedId, normalizedHeaders),
                     rows: normalizedRows,
                     cellErrors: {},
                     autocorrectedCells: {},
@@ -770,11 +777,35 @@ function switchTab(tableId) {
 
 function detectTableType(csvHeaders) {
   let joined = csvHeaders.join(',').toLowerCase();
+  if (joined.includes('specific_fee_code')) return 'table5';
   if (joined.includes('dti_no') || joined.includes('business_type')) return 'table1';
   if (joined.includes('business_line_code')) return 'table2';
   if (joined.includes('application_type')) return 'table3';
-  if (joined.includes('application_or_no') || joined.includes('fee_code') || joined.includes('type')) return 'table4';
-  return 'table1'; 
+  if (joined.includes('application_or_no')) return 'table4';
+  return 'table1';
+}
+
+function collectExtraHeaders(tableId, csvHeaders) {
+  let known = new Set(((schemas[tableId] && schemas[tableId].FIELD_ORDER) || []).map(h => String(h).toLowerCase()));
+  let extras = [];
+  let seen = new Set();
+  (csvHeaders || []).forEach(h => {
+    let name = String(h || '').trim();
+    if (!name) return;
+    let key = name.toLowerCase();
+    if (known.has(key) || seen.has(key)) return;
+    if (key === 'interest' || key === 'surcharge') return;
+    seen.add(key);
+    extras.push(name);
+  });
+  return extras;
+}
+
+function foldFeeAmountKeys(row) {
+  if (!row) return row;
+  if ((row.interest == null || String(row.interest).trim() === '') && row.Interest != null) row.interest = row.Interest;
+  if ((row.surcharge == null || String(row.surcharge).trim() === '') && row.Surcharge != null) row.surcharge = row.Surcharge;
+  return row;
 }
 
 function escapeHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -789,8 +820,7 @@ function renderTable() {
     }
 
     let schema = schemas[activeTableId];
-    // Force the headers to strictly match the Schema, stripping out any garbage columns from the raw CSV
-    st.headers = [...schema.FIELD_ORDER];
+    st.headers = [...schema.FIELD_ORDER, ...(st.extraHeaders || [])];
     let orderedHeaders = st.headers;
 
     let totalRows = st.rows.length;
@@ -966,7 +996,7 @@ function showTooltip(input) {
   }
 
   // Table 2: show matched Business Natures description on hover
-  if (k === 'business_line_code') {
+  if (k === 'business_line_code' || k === 'line_code') {
     let val = st.rows[r]?.[k];
     let hit = lookupBusinessLine(val);
     if (hit && hit.description) {
@@ -1163,6 +1193,18 @@ function customValidateRow(tableId, row, errs, seenLists) {
         }
     }
 
+    if (tableId === 'table5') {
+        let lineCode = g('line_code');
+        if (lineCode) {
+            let hit = lookupBusinessLine(lineCode);
+            if (!hit) {
+                errs.line_code = 'Code not found in Business Natures reference';
+            } else if (hit.isActive === false) {
+                errs.line_code = 'Code exists in Business Natures reference but is marked INACTIVE';
+            }
+        }
+    }
+
     // CROSS-TABLE: Fee OR → Application (only when Application is loaded + validated)
     if (tableId === 'table4') {
         let orNo = g('application_or_no');
@@ -1170,9 +1212,14 @@ function customValidateRow(tableId, row, errs, seenLists) {
             if (orNo && !MasterStore.validORs.has(orNo)) {
                 errs.application_or_no = 'OR not found in Application sheet';
             }
+            let app = orNo ? MasterStore.validApps.get(orNo) : null;
+            let feeYear = g('year');
+            if (app && feeYear && String(app.year) && Number(feeYear) !== Number(app.year)) {
+                errs.year = 'Must match Application year (' + app.year + ')';
+            }
         }
-        let feeYear = Number(g('year'));
-        if (feeYear && feeYear < 2026) {
+        let feeYearN = Number(g('year'));
+        if (feeYearN && feeYearN < 2026) {
             errs.year = 'Per guidelines: Application fees sheet is for 2026+ transactions only (not for 2025 or earlier)';
         }
     }
@@ -1219,16 +1266,17 @@ function customValidateRow(tableId, row, errs, seenLists) {
         }
     }
     else if (tableId === 'table4') {
+        foldFeeAmountKeys(row);
         let amtN = Number((g('amount')||'0').replace(/[^\d.\-]/g,''));
-        let surN = Number((g('Surcharge')||'0').replace(/[^\d.\-]/g,''));
-        let intN = Number((g('Interest')||'0').replace(/[^\d.\-]/g,''));
+        let surN = Number((g('surcharge')||'0').replace(/[^\d.\-]/g,''));
+        let intN = Number((g('interest')||'0').replace(/[^\d.\-]/g,''));
         let dscN = Number((g('discount')||'0').replace(/[^\d.\-]/g,''));
         let expected = amtN + surN + intN - dscN;
         let totalVal = g('total');
         if (totalVal !== '' && !isNaN(Number(totalVal.replace(/[^\d.\-]/g,'')))) {
             let expectedRounded = Math.round(expected * 100) / 100;
             if (Math.abs(Number(totalVal.replace(/[^\d.\-]/g,'')) - expectedRounded) > 0.001) {
-                errs.total = 'Must equal amount + Surcharge + Interest - discount (' + expectedRounded + ')';
+                errs.total = 'Must equal amount + surcharge + interest - discount (' + expectedRounded + ')';
             }
         }
         let qf = g('qtr_from'), qt = g('qtr_to');
@@ -1394,7 +1442,7 @@ document.getElementById('closeDupModal').addEventListener('click', () => {
     finalizeValidation(activeTableId);
 });
 
-const VALIDATE_ORDER = ['table1', 'table2', 'table3', 'table4'];
+const VALIDATE_ORDER = ['table1', 'table2', 'table3', 'table4', 'table5'];
 
 function emitCrossTableTips(tableId) {
     const tips = [];
@@ -1404,6 +1452,9 @@ function emitCrossTableTips(tableId) {
     }
     if (tableId === 'table4' && !(appState.table3.loaded && appState.table3.hasValidated)) {
         tips.push('Tip: Cross-table OR check is off until you load and validate the Application sheet.');
+    }
+    if (tableId === 'table5') {
+        tips.push('Tip: Specific Fee is optional. line_code is checked against Business Natures.');
     }
     tips.forEach(msg => {
         auditLog.push({ table: tableId, row: 'System', type: 'INFO', message: msg });
@@ -1439,7 +1490,10 @@ function finalizeValidation(tableId) {
     let crossTips = emitCrossTableTips(tableId);
     
     if (tableId === 'table1') MasterStore.validBINs.clear();
-    if (tableId === 'table3') MasterStore.validORs.clear();
+    if (tableId === 'table3') {
+        MasterStore.validORs.clear();
+        MasterStore.validApps.clear();
+    }
 
     if (tableId === 'table1') {
         st.rows.forEach(row => {
@@ -1452,7 +1506,12 @@ function finalizeValidation(tableId) {
         st.rows.forEach(row => {
             if (!row) return;
             let orNo = (row['or_no'] == null ? '' : String(row['or_no'])).trim();
-            if (orNo) MasterStore.validORs.add(orNo);
+            if (orNo) {
+                MasterStore.validORs.add(orNo);
+                let year = (row['year'] == null ? '' : String(row['year'])).trim();
+                let tot = Number(String(row['total'] == null ? '0' : row['total']).replace(/[^\d.\-]/g, '')) || 0;
+                MasterStore.validApps.set(orNo, { year, total: tot });
+            }
         });
     }
 
@@ -1463,6 +1522,27 @@ function finalizeValidation(tableId) {
             st.cellErrors[idx] = errs;
         }
     });
+
+    if (tableId === 'table4' && appState.table3.loaded && appState.table3.hasValidated) {
+        let sums = {};
+        st.rows.forEach((row, idx) => {
+            if (!row) return;
+            let orNo = (row['application_or_no'] == null ? '' : String(row['application_or_no'])).trim();
+            if (!orNo) return;
+            let tot = Number(String(row['total'] == null ? '0' : row['total']).replace(/[^\d.\-]/g, '')) || 0;
+            if (!sums[orNo]) sums[orNo] = { total: 0, firstIdx: idx };
+            sums[orNo].total += tot;
+        });
+        Object.keys(sums).forEach(orNo => {
+            let app = MasterStore.validApps.get(orNo);
+            if (!app) return;
+            if (Math.abs(sums[orNo].total - app.total) > 0.01) {
+                let idx = sums[orNo].firstIdx;
+                st.cellErrors[idx] = st.cellErrors[idx] || {};
+                st.cellErrors[idx].total = 'Sum of fee totals for OR ' + orNo + ' (' + (Math.round(sums[orNo].total * 100) / 100) + ') must equal Application total (' + app.total + ')';
+            }
+        });
+    }
     
     if(tableId === activeTableId) {
         currentPage = 1;
@@ -1541,10 +1621,10 @@ function customAutoCorrect(tableId, row, fixes) {
         else if (loc !== '1' && loc !== '0' && loc !== '') { row.location_owned = ''; fixes.push('location_owned: cleared invalid'); }
 
         let act = v('activity_type').toLowerCase();
-        if (act === 'main' || act === 'main office') { row.activity_type = 'Main Office'; fixes.push('activity_type: normalized to Main Office'); }
-        else if (act === 'branch' || act === 'branch office') { row.activity_type = 'Branch Office'; fixes.push('activity_type: normalized to Branch Office'); }
-        else if (act.includes('admin')) { row.activity_type = 'Admin Office Only'; fixes.push('activity_type: normalized to Admin Office Only'); }
-        else if (act === 'warehouse') { row.activity_type = 'Warehouse'; fixes.push('activity_type: normalized to Warehouse'); }
+        if (act === 'main' || act === 'main office') { row.activity_type = 'MAIN OFFICE'; fixes.push('activity_type: normalized to MAIN OFFICE'); }
+        else if (act === 'branch' || act === 'branch office') { row.activity_type = 'BRANCH OFFICE'; fixes.push('activity_type: normalized to BRANCH OFFICE'); }
+        else if (act.includes('admin')) { row.activity_type = 'ADMIN OFFICE ONLY'; fixes.push('activity_type: normalized to ADMIN OFFICE ONLY'); }
+        else if (act === 'warehouse') { row.activity_type = 'WAREHOUSE'; fixes.push('activity_type: normalized to WAREHOUSE'); }
         else if (act === 'others' || act === 'other') { row.activity_type = 'Others'; fixes.push('activity_type: normalized to Others'); }
 
         let cit = v('incharge_country_of_citizenship').toLowerCase();
@@ -1624,7 +1704,8 @@ function customAutoCorrect(tableId, row, fixes) {
         }
 
         // Strip Excel comma-formatting from all numeric fields (e.g. "4,000.00" → "4000.00")
-        ['amount','discount','Interest','Surcharge','total'].forEach(f => {
+        foldFeeAmountKeys(row);
+        ['amount','discount','interest','surcharge','total'].forEach(f => {
             let raw = v(f);
             if (raw && raw.includes(',')) {
                 let stripped = raw.replace(/,/g, '');
@@ -1636,8 +1717,8 @@ function customAutoCorrect(tableId, row, fixes) {
         });
 
         let amtN = Number(v('amount').replace(/[^\d.\-]/g,'') || 0);
-        let surN = Number(v('Surcharge').replace(/[^\d.\-]/g,'') || 0);
-        let intN = Number(v('Interest').replace(/[^\d.\-]/g,'') || 0);
+        let surN = Number(v('surcharge').replace(/[^\d.\-]/g,'') || 0);
+        let intN = Number(v('interest').replace(/[^\d.\-]/g,'') || 0);
         let dscN = Number(v('discount').replace(/[^\d.\-]/g,'') || 0);
         let expectedTotal = Math.round((amtN + surN + intN - dscN) * 100) / 100;
         let currentTotal = v('total').replace(/[^\d.\-]/g,'');

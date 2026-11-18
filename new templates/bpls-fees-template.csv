@@ -1,0 +1,6 @@
+business_bin,code,description,type,year,qtr_from,qtr_to,amount,discount,interest,surcharge,total,application_or_no,notes
+BIN-0001,0001,"Sample license fee",LICENSE,2026,1,4,1000,0,0,0,1000,OR-0001,"application_or_no must match an imported application.
+year must match that application.
+total must equal amount - discount + interest + surcharge.
+The sum of total for one OR must match the application total.
+qtr_from and qtr_to are used for quarterly tax codes."

@@ -1,0 +1,12 @@
+business_type,incharge_sex,business_name,trade_name,bin,tin_no,dti_no,dti_registration_expiry_date,sec_no,cda_no,telephone_no,cellphone_no,email_address,incharge_street,incharge_barangay,incharge_municipality,incharge_province,incharge_first_name,incharge_middle_name,incharge_last_name,incharge_extension_name,incharge_country_of_citizenship,area,floor_area,no_of_male_employees,no_of_female_employees,no_of_employees_residing_within_the_area,no_of_van,no_of_truck,no_of_motorcycle,office_street,office_barangay_code,location_owned,tdn_no,pin_no,lessor_name,monthly_rental,activity_type,notes
+"SOLE PROPRIETORSHIP",M,"Sample Business","Sample Store",BIN-0001,123-456-789-000,DTI-0001,12/31/2026,,,028123456,09171234567,sample@example.com,"Sample Street","Sample Barangay","Sample Municipality","Sample Province",Juan,Santos,"Dela Cruz",,Filipino,50,40,2,3,4,0,0,1,"Sample Street",0123456789,1,,,,0,"MAIN OFFICE","Replace the sample row before uploading.
+Dates use m/d/Y.
+business_type: SOLE PROPRIETORSHIP, ONE PERSON CORPORATION, PARTNERSHIP, CORPORATION, or COOPERATIVE.
+Fill dti_no for sole proprietorship, sec_no for corporation or partnership, and cda_no for cooperative.
+incharge_sex: M or F.
+activity_type: MAIN OFFICE, BRANCH OFFICE, ADMIN OFFICE ONLY, or WAREHOUSE.
+location_owned: 1 or 0.
+When location_owned is 1, fill tdn_no or pin_no. Both may be filled.
+Leave them blank when location_owned is 0.
+Use letters, numbers, dashes, and underscores.
+tdn_no is at most 20 characters."

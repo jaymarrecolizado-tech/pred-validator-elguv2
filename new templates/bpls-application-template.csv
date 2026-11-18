@@ -1,0 +1,6 @@
+business_bin,application_type,application_date,issued_date,year,qtr_from,qtr_to,valid_until,amount,discount,interest,surcharge,total,or_no,or_date,permit_no,barangay_clearance_number,business_plate_number,mode_of_payment,notes
+BIN-0001,N,01/15/2026,01/20/2026,2026,1,4,12/31/2026,1000,0,0,0,1000,OR-0001,01/20/2026,PERMIT-0001,,,MANUAL,"business_bin must already exist.
+application_type: N (New), R (Renewal), or Q (Quarterly).
+Dates use m/d/Y.
+mode_of_payment: ONLINE or MANUAL.
+total must equal amount - discount + interest + surcharge."

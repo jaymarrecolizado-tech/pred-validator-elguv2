@@ -1,0 +1,6 @@
+bin,business_line_code,capital_amount,gross_amount,retired_date,details_area,gross_amount_essential,gross_amount_nonessential,notes
+BIN-0001,LINE-CODE,100000,250000,,50,,,"bin and business_line_code must already exist.
+retired_date is optional and uses m/d/Y.
+Add more details_* columns for activity details.
+Add columns ending in _essential for essential and nonessential amounts.
+Leave those cells blank when they are not used."
